@@ -1,0 +1,433 @@
+import { FormEvent, useEffect, useState } from 'react';
+import {
+  createBranch,
+  deactivateBranch,
+  getBranches,
+  updateBranch,
+} from '../api/branches.api.js';
+import type {
+  Branch,
+  CreateBranchInput,
+} from '../types/branch.types.js';
+
+interface BranchesPageProps {
+  onNavigate?: (path: string) => void;
+}
+
+interface BranchFormState {
+  name: string;
+  code: string;
+}
+
+const emptyForm: BranchFormState = {
+  name: '',
+  code: '',
+};
+
+export function BranchesPage({
+  onNavigate,
+}: BranchesPageProps) {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [form, setForm] =
+    useState<BranchFormState>(emptyForm);
+  const [editingBranch, setEditingBranch] =
+    useState<Branch | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deactivatingId, setDeactivatingId] =
+    useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function loadBranches(): Promise<void> {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await getBranches();
+      setBranches(result);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load branches.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadBranches();
+  }, []);
+
+  function resetForm(): void {
+    setEditingBranch(null);
+    setForm(emptyForm);
+  }
+
+  function beginEdit(branch: Branch): void {
+    setEditingBranch(branch);
+    setForm({
+      name: branch.name,
+      code: branch.code,
+    });
+    setError(null);
+    setSuccess(null);
+  }
+
+  function updateField(
+    field: keyof BranchFormState,
+    value: string,
+  ): void {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setError(null);
+    setSuccess(null);
+  }
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    event.preventDefault();
+
+    const name = form.name.trim();
+    const code = form.code.trim().toUpperCase();
+
+    if (name.length < 2 || code.length < 2) {
+      setError(
+        'Branch name and code are required.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (editingBranch) {
+        await updateBranch(editingBranch.id, {
+          name,
+          code,
+        });
+
+        setSuccess(
+          'Branch information updated successfully.',
+        );
+      } else {
+        const input: CreateBranchInput = {
+          name,
+          code,
+        };
+
+        await createBranch(input);
+
+        setSuccess(
+          'Branch created successfully.',
+        );
+      }
+
+      resetForm();
+      await loadBranches();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to save branch.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeactivate(
+    branch: Branch,
+  ): Promise<void> {
+    const confirmed = window.confirm(
+      `Deactivate "${branch.name}"? This branch will no longer be available for active operations.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeactivatingId(branch.id);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await deactivateBranch(branch.id);
+
+      if (editingBranch?.id === branch.id) {
+        resetForm();
+      }
+
+      setSuccess(
+        'Branch deactivated successfully.',
+      );
+
+      await loadBranches();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to deactivate branch.',
+      );
+    } finally {
+      setDeactivatingId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="tenant-module-page">
+        <div className="tenant-dashboard-loading">
+          <p>Loading branches...</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="tenant-module-page">
+      <header className="tenant-module-header">
+        <div>
+          <p className="dashboard-eyebrow">
+            Organization
+          </p>
+          <h1>Branches</h1>
+          <p>
+            Manage the physical and operational branches
+            belonging to your organization.
+          </p>
+        </div>
+
+        <div className="tenant-module-meta">
+          <strong>
+            {branches.length}{' '}
+            {branches.length === 1
+              ? 'active branch'
+              : 'active branches'}
+          </strong>
+        </div>
+      </header>
+
+      {error && (
+        <div className="tenant-form-alert tenant-form-alert-error">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="tenant-form-alert tenant-form-alert-success">
+          {success}
+        </div>
+      )}
+
+      <div className="branches-layout">
+        <div className="dashboard-card">
+          <div className="card-heading">
+            <div>
+              <p className="dashboard-card-label">
+                {editingBranch ? 'Edit branch' : 'New branch'}
+              </p>
+              <h2>
+                {editingBranch
+                  ? 'Update branch'
+                  : 'Create branch'}
+              </h2>
+            </div>
+          </div>
+
+          <form
+            className="tenant-organization-form"
+            onSubmit={(event) =>
+              void handleSubmit(event)
+            }
+          >
+            <div className="tenant-form-grid">
+              <label>
+                <span>Branch name</span>
+                <input
+                  value={form.name}
+                  onChange={(event) =>
+                    updateField(
+                      'name',
+                      event.target.value,
+                    )
+                  }
+                  required
+                  minLength={2}
+                  maxLength={200}
+                  placeholder="Main Hospital"
+                />
+              </label>
+
+              <label>
+                <span>Branch code</span>
+                <input
+                  value={form.code}
+                  onChange={(event) =>
+                    updateField(
+                      'code',
+                      event.target.value,
+                    )
+                  }
+                  required
+                  minLength={2}
+                  maxLength={50}
+                  placeholder="MAIN"
+                />
+              </label>
+            </div>
+
+            <div className="branches-form-actions">
+              <button
+                type="submit"
+                className="dashboard-primary-button"
+                disabled={saving}
+              >
+                {saving
+                  ? 'Saving...'
+                  : editingBranch
+                    ? 'Save changes'
+                    : 'Create branch'}
+              </button>
+
+              {editingBranch && (
+                <button
+                  type="button"
+                  className="dashboard-secondary-button"
+                  onClick={resetForm}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        <div className="dashboard-card">
+          <div className="card-heading">
+            <div>
+              <p className="dashboard-card-label">
+                Active branches
+              </p>
+              <h2>Branch directory</h2>
+            </div>
+          </div>
+
+          {branches.length === 0 ? (
+            <div className="branches-empty-state">
+              <h3>No branches configured</h3>
+              <p>
+                Create your first branch to begin
+                configuring the organization's operational
+                structure.
+              </p>
+            </div>
+          ) : (
+            <div className="branches-list">
+              {branches.map((branch) => (
+                <article
+                  className="branch-list-item"
+                  key={branch.id}
+                >
+                  <div className="branch-list-main">
+                    <div>
+                      <h3>{branch.name}</h3>
+                      <p>
+                        Code: <strong>{branch.code}</strong>
+                      </p>
+                    </div>
+
+                    <span className="branch-status">
+                      {branch.status}
+                    </span>
+                  </div>
+
+                  <div className="branch-list-meta">
+                    <span>
+                      Departments:{' '}
+                      {branch._count?.departments ?? 0}
+                    </span>
+                    <span>
+                      Members:{' '}
+                      {branch._count?.memberships ?? 0}
+                    </span>
+                    <span>
+                      Services:{' '}
+                      {branch._count?.services ?? 0}
+                    </span>
+                  </div>
+
+                  {branch.organization && (
+                    <p className="branch-organization">
+                      Organization:{' '}
+                      <strong>
+                        {branch.organization.name}
+                      </strong>
+                    </p>
+                  )}
+
+                  <div className="branch-list-actions">
+                    <button
+                      type="button"
+                      className="dashboard-secondary-button"
+                      onClick={() =>
+                        beginEdit(branch)
+                      }
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      className="dashboard-danger-button"
+                      onClick={() =>
+                        void handleDeactivate(branch)
+                      }
+                      disabled={
+                        deactivatingId === branch.id
+                      }
+                    >
+                      {deactivatingId === branch.id
+                        ? 'Deactivating...'
+                        : 'Deactivate'}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="branches-footer-actions">
+        <button
+          type="button"
+          className="dashboard-secondary-button"
+          onClick={() =>
+            onNavigate?.('/tenant/organization')
+          }
+        >
+          Back to organization
+        </button>
+
+        <button
+          type="button"
+          className="dashboard-secondary-button"
+          onClick={() =>
+            onNavigate?.('/tenant/departments')
+          }
+        >
+          Continue to departments
+        </button>
+      </div>
+    </section>
+  );
+}

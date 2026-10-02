@@ -1,0 +1,27 @@
+{
+  "name": "@revaltrix/database",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "format": "prisma format",
+    "validate": "prisma validate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "prisma": "6.16.2",
+    "typescript": "^5.9.3"
+  }
+}

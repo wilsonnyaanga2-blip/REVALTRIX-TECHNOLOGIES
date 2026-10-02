@@ -1,0 +1,593 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import crypto from 'node:crypto';
+import { EncounterStatus, Prisma, RecordStatus } from '@prisma/client';
+import { DatabaseService } from '../../database/database.service.js';
+import { AuthorizationService } from '../authorization/authorization.service.js';
+import { CreateEncounterDto } from './dto/create-encounter.dto.js';
+import { EncounterQueryDto } from './dto/encounter-query.dto.js';
+import { TransitionEncounterDto } from './dto/transition-encounter.dto.js';
+
+@Injectable()
+export class EncountersService {
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly authorization: AuthorizationService,
+  ) {}
+
+  private encounterSelect() {
+    return {
+      id: true,
+      encounterNumber: true,
+      type: true,
+      status: true,
+      reason: true,
+      startedAt: true,
+      completedAt: true,
+      cancelledAt: true,
+      cancelledReason: true,
+      createdAt: true,
+      updatedAt: true,
+      patientTenantRecord: {
+        select: {
+          id: true,
+          patientNumber: true,
+          status: true,
+          patientProfile: {
+            select: {
+              id: true,
+              firstName: true,
+              secondName: true,
+              user: {
+                select: {
+                  displayName: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      provider: {
+        select: {
+          id: true,
+          providerNumber: true,
+          providerType: true,
+          professionalTitle: true,
+          specialty: true,
+          user: {
+            select: {
+              displayName: true,
+            },
+          },
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+      department: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+      createdByUser: {
+        select: {
+          id: true,
+          displayName: true,
+        },
+      },
+    } satisfies Prisma.EncounterSelect;
+  }
+
+  async create(userId: string, dto: CreateEncounterDto) {
+    const context = await this.authorization.getContext(userId);
+
+    const patient = await this.database.client.patientTenantRecord.findFirst({
+      where: {
+        id: dto.patientTenantRecordId,
+        tenantId: context.tenantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        patientNumber: true,
+        status: true,
+      },
+    });
+
+    if (!patient) {
+      throw new BadRequestException(
+        'Patient must be an active patient of this facility',
+      );
+    }
+
+    if (dto.providerId) {
+      const provider = await this.database.client.providerProfile.findFirst({
+        where: {
+          id: dto.providerId,
+          tenantId: context.tenantId,
+          status: RecordStatus.ACTIVE,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!provider) {
+        throw new BadRequestException(
+          'Provider does not belong to this facility or is not active',
+        );
+      }
+    }
+
+    if (dto.branchId) {
+      const branch = await this.database.client.branch.findFirst({
+        where: {
+          id: dto.branchId,
+          tenantId: context.tenantId,
+          status: RecordStatus.ACTIVE,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!branch) {
+        throw new BadRequestException(
+          'Branch does not belong to this facility or is not active',
+        );
+      }
+    }
+
+    if (dto.departmentId) {
+      const department = await this.database.client.department.findFirst({
+        where: {
+          id: dto.departmentId,
+          tenantId: context.tenantId,
+          status: RecordStatus.ACTIVE,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          branchId: true,
+        },
+      });
+
+      if (!department) {
+        throw new BadRequestException(
+          'Department does not belong to this facility or is not active',
+        );
+      }
+
+      if (dto.branchId && department.branchId && department.branchId !== dto.branchId) {
+        throw new BadRequestException(
+          'Department does not belong to the selected branch',
+        );
+      }
+    }
+
+    const reason = dto.reason?.trim() || null;
+
+    try {
+      return await this.database.client.$transaction(async (transaction) => {
+        const encounterNumber =
+          `ENC-${new Date().getUTCFullYear()}-${crypto.randomUUID()
+            .replace(/-/g, '')
+            .slice(0, 12)
+            .toUpperCase()}`;
+
+        const encounter = await transaction.encounter.create({
+          data: {
+            tenantId: context.tenantId,
+            patientTenantRecordId: patient.id,
+            providerId: dto.providerId ?? null,
+            branchId: dto.branchId ?? context.branchId ?? null,
+            departmentId: dto.departmentId ?? context.departmentId ?? null,
+            createdByUserId: userId,
+            encounterNumber,
+            type: dto.type,
+            status: EncounterStatus.CREATED,
+            reason,
+          },
+          select: this.encounterSelect(),
+        });
+
+        await transaction.encounterStatusHistory.create({
+          data: {
+            encounterId: encounter.id,
+            tenantId: context.tenantId,
+            fromStatus: null,
+            toStatus: EncounterStatus.CREATED,
+            changedByUserId: userId,
+            reason: 'Encounter created',
+          },
+        });
+
+        await transaction.auditEvent.create({
+          data: {
+            tenantId: context.tenantId,
+            actorUserId: userId,
+            branchId: encounter.branch?.id ?? context.branchId,
+            action: 'ENCOUNTER_CREATED',
+            resourceType: 'ENCOUNTER',
+            resourceId: encounter.id,
+            outcome: 'SUCCESS',
+            reason: 'Encounter created',
+            metadata: {
+              encounterNumber: encounter.encounterNumber,
+              patientTenantRecordId: patient.id,
+              patientNumber: patient.patientNumber,
+              type: encounter.type,
+              providerId: encounter.provider?.id ?? null,
+              departmentId: encounter.department?.id ?? null,
+              branchId: encounter.branch?.id ?? null,
+            },
+          },
+        });
+
+        return encounter;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Encounter number already exists in this facility',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private async transition(
+    userId: string,
+    encounterId: string,
+    allowedFrom: EncounterStatus[],
+    toStatus: EncounterStatus,
+    dto: TransitionEncounterDto = {},
+  ) {
+    const context = await this.authorization.getContext(userId);
+    const reason = dto.reason?.trim() || null;
+
+    if (
+      (toStatus === EncounterStatus.CANCELLED ||
+        toStatus === EncounterStatus.REFERRED) &&
+      !reason
+    ) {
+      throw new BadRequestException(
+        `${toStatus === EncounterStatus.CANCELLED ? 'Cancellation' : 'Referral'} reason is required`,
+      );
+    }
+
+    try {
+      return await this.database.client.$transaction(async (transaction) => {
+        const encounter = await transaction.encounter.findFirst({
+          where: {
+            id: encounterId,
+            tenantId: context.tenantId,
+          },
+          select: {
+            id: true,
+            encounterNumber: true,
+            status: true,
+            branchId: true,
+          },
+        });
+
+        if (!encounter) {
+          throw new NotFoundException('Encounter not found');
+        }
+
+        if (!allowedFrom.includes(encounter.status)) {
+          throw new ConflictException(
+            `Encounter cannot transition from ${encounter.status} to ${toStatus}`,
+          );
+        }
+
+        const now = new Date();
+
+        const data: Prisma.EncounterUpdateInput = {
+          status: toStatus,
+        };
+
+        if (toStatus === EncounterStatus.IN_PROGRESS) {
+          data.startedAt = now;
+        }
+
+        if (toStatus === EncounterStatus.COMPLETED) {
+          data.completedAt = now;
+        }
+
+        if (toStatus === EncounterStatus.CANCELLED) {
+          data.cancelledAt = now;
+          data.cancelledReason = reason;
+        }
+
+        const updated = await transaction.encounter.update({
+          where: {
+            id: encounter.id,
+          },
+          data,
+          select: this.encounterSelect(),
+        });
+
+        await transaction.encounterStatusHistory.create({
+          data: {
+            encounterId: encounter.id,
+            tenantId: context.tenantId,
+            fromStatus: encounter.status,
+            toStatus,
+            changedByUserId: userId,
+            reason,
+          },
+        });
+
+        await transaction.auditEvent.create({
+          data: {
+            tenantId: context.tenantId,
+            actorUserId: userId,
+            branchId: encounter.branchId ?? context.branchId,
+            action: 'ENCOUNTER_STATUS_CHANGED',
+            resourceType: 'ENCOUNTER',
+            resourceId: encounter.id,
+            outcome: 'SUCCESS',
+            reason: reason ?? `Encounter transitioned to ${toStatus}`,
+            metadata: {
+              encounterNumber: encounter.encounterNumber,
+              fromStatus: encounter.status,
+              toStatus,
+            },
+          },
+        });
+
+        return updated;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException('Encounter not found');
+      }
+
+      throw error;
+    }
+  }
+
+  async checkIn(userId: string, encounterId: string) {
+    return this.transition(
+      userId,
+      encounterId,
+      [EncounterStatus.CREATED],
+      EncounterStatus.CHECKED_IN,
+    );
+  }
+
+  async triage(userId: string, encounterId: string) {
+    return this.transition(
+      userId,
+      encounterId,
+      [EncounterStatus.CHECKED_IN],
+      EncounterStatus.TRIAGED,
+    );
+  }
+
+  async start(userId: string, encounterId: string) {
+    return this.transition(
+      userId,
+      encounterId,
+      [EncounterStatus.TRIAGED],
+      EncounterStatus.IN_PROGRESS,
+    );
+  }
+
+  async complete(userId: string, encounterId: string) {
+    return this.transition(
+      userId,
+      encounterId,
+      [EncounterStatus.IN_PROGRESS],
+      EncounterStatus.COMPLETED,
+    );
+  }
+
+  async cancel(
+    userId: string,
+    encounterId: string,
+    dto: TransitionEncounterDto,
+  ) {
+    return this.transition(
+      userId,
+      encounterId,
+      [
+        EncounterStatus.CREATED,
+        EncounterStatus.CHECKED_IN,
+        EncounterStatus.TRIAGED,
+        EncounterStatus.IN_PROGRESS,
+      ],
+      EncounterStatus.CANCELLED,
+      dto,
+    );
+  }
+
+  async noShow(
+    userId: string,
+    encounterId: string,
+    dto: TransitionEncounterDto,
+  ) {
+    return this.transition(
+      userId,
+      encounterId,
+      [EncounterStatus.CREATED, EncounterStatus.CHECKED_IN],
+      EncounterStatus.NO_SHOW,
+      dto,
+    );
+  }
+
+  async refer(
+    userId: string,
+    encounterId: string,
+    dto: TransitionEncounterDto,
+  ) {
+    return this.transition(
+      userId,
+      encounterId,
+      [EncounterStatus.IN_PROGRESS],
+      EncounterStatus.REFERRED,
+      dto,
+    );
+  }
+
+  async list(userId: string, query: EncounterQueryDto) {
+    const context = await this.authorization.getContext(userId);
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const search = query.search?.trim();
+
+    const where: Prisma.EncounterWhereInput = {
+      tenantId: context.tenantId,
+      ...(query.patientTenantRecordId
+        ? { patientTenantRecordId: query.patientTenantRecordId }
+        : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.type ? { type: query.type } : {}),
+      ...(query.providerId ? { providerId: query.providerId } : {}),
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                encounterNumber: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                patientTenantRecord: {
+                  patientNumber: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                patientTenantRecord: {
+                  patientProfile: {
+                    user: {
+                      displayName: {
+                        contains: search,
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, encounters] = await Promise.all([
+      this.database.client.encounter.count({ where }),
+      this.database.client.encounter.findMany({
+        where,
+        select: this.encounterSelect(),
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      data: encounters,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  async getHistory(userId: string, encounterId: string) {
+    const context = await this.authorization.getContext(userId);
+
+    const encounter = await this.database.client.encounter.findFirst({
+      where: {
+        id: encounterId,
+        tenantId: context.tenantId,
+      },
+      select: {
+        id: true,
+        encounterNumber: true,
+      },
+    });
+
+    if (!encounter) {
+      throw new NotFoundException('Encounter not found');
+    }
+
+    const history =
+      await this.database.client.encounterStatusHistory.findMany({
+        where: {
+          encounterId: encounter.id,
+          tenantId: context.tenantId,
+        },
+        select: {
+          id: true,
+          fromStatus: true,
+          toStatus: true,
+          reason: true,
+          createdAt: true,
+          changedByUser: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      });
+
+    return {
+      encounter: {
+        id: encounter.id,
+        encounterNumber: encounter.encounterNumber,
+      },
+      data: history,
+    };
+  }
+
+  async getById(userId: string, encounterId: string) {
+    const context = await this.authorization.getContext(userId);
+
+    const encounter = await this.database.client.encounter.findFirst({
+      where: {
+        id: encounterId,
+        tenantId: context.tenantId,
+      },
+      select: this.encounterSelect(),
+    });
+
+    if (!encounter) {
+      throw new NotFoundException('Encounter not found');
+    }
+
+    return encounter;
+  }
+}
