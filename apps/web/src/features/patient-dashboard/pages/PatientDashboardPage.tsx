@@ -233,6 +233,14 @@ export function PatientDashboardPage({
           <button
             type="button"
             className="patient-nav-item"
+            onClick={() => onNavigate('/patient/profile')}
+          >
+            My profile
+          </button>
+
+          <button
+            type="button"
+            className="patient-nav-item"
             onClick={() => onNavigate('/patient/appointments')}
           >
             Appointments

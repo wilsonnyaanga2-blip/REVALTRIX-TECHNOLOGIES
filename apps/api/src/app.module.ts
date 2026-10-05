@@ -18,6 +18,8 @@ import { RegistrationDashboardModule } from './modules/registration-dashboard/re
 import { VerificationModule } from './modules/verification/verification.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { PatientsModule } from './modules/patients/patients.module.js';
+import { PatientDataModule } from './modules/patient-data/patient-data.module.js';
+import { PatientFamilyModule } from './modules/patient-family/patient-family.module.js';
 import { ProvidersModule } from './modules/providers/providers.module.js';
 import { EncountersModule } from './modules/encounters/encounters.module.js';
 @Module({
@@ -45,6 +47,8 @@ import { EncountersModule } from './modules/encounters/encounters.module.js';
     VerificationModule,
     AuthorizationModule,
     PatientsModule,
+    PatientDataModule,
+    PatientFamilyModule,
     ProvidersModule,
     EncountersModule,
     DashboardModule,

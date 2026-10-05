@@ -1886,3 +1886,195 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Patient profile workspace */
+.patient-profile-content { display: flex; flex-direction: column; gap: 20px; }
+.patient-profile-loading { min-height: 50vh; display: grid; place-items: center; padding: 32px; }
+.patient-profile-identity { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.patient-profile-identity h2 { margin: 0; }
+.patient-profile-identities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.patient-profile-identities span { padding: 6px 10px; border-radius: 999px; background: #edf3f7; font-size: 0.85rem; }
+.patient-profile-help { color: #64748b; font-size: 0.9rem; line-height: 1.5; }
+.patient-profile-notice { padding: 12px 16px; border: 1px solid #9bd7b2; border-radius: 10px; background: #f0fbf4; color: #17643a; }
+.patient-profile-error { margin: 12px 0; padding: 12px 14px; border: 1px solid #f0b7b7; border-radius: 8px; color: #9f2525; background: #fff6f6; overflow-wrap: anywhere; }
+.patient-profile-sections { display: grid; gap: 18px; }
+.patient-profile-section { min-width: 0; }
+.patient-profile-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.patient-profile-section-heading h2 { margin: 0 0 8px; }
+.patient-profile-section-heading p:last-child { margin-bottom: 0; color: #64748b; line-height: 1.5; }
+.patient-profile-form { border-top: 1px solid #e2e8f0; padding-top: 18px; }
+.patient-profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.patient-profile-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; font-size: 0.9rem; }
+.patient-profile-field > span { font-weight: 600; color: #334155; }
+.patient-profile-field input:not([type="checkbox"]), .patient-profile-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #0f172a; font: inherit; }
+.patient-profile-field input:focus, .patient-profile-field textarea:focus { outline: 2px solid #7baed0; outline-offset: 1px; }
+.patient-profile-field input[type="checkbox"] { width: 20px; height: 20px; }
+.patient-profile-field.wide { grid-column: 1 / -1; }
+.patient-profile-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.patient-profile-records { display: grid; gap: 12px; }
+.patient-profile-record { padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; min-width: 0; }
+.patient-profile-record dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0 0 14px; }
+.patient-profile-record-field { min-width: 0; }
+.patient-profile-record-field dt { color: #64748b; font-size: 0.82rem; margin-bottom: 5px; }
+.patient-profile-record-field dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.patient-profile-empty { padding: 14px 0; }
+.patient-profile-empty p { margin: 0; }
+.patient-dashboard-button.danger { border: 1px solid #e5a0a0; background: #fff; color: #a12626; }
+@media (max-width: 700px) {
+  .patient-profile-fields, .patient-profile-record dl { grid-template-columns: minmax(0, 1fr); }
+  .patient-profile-section-heading { flex-direction: column; }
+  .patient-profile-section-heading > button { align-self: flex-start; }
+}
+
+/* Patient family relationships */
+
+.patient-family-security-notice {
+  margin-bottom: 24px;
+  padding: 18px 20px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.patient-family-security-notice strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.patient-family-security-notice p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.patient-family-request-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr);
+  gap: 18px;
+}
+
+.patient-family-request-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.patient-family-request-form label > span {
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.patient-family-request-form input,
+.patient-family-request-form select,
+.patient-family-request-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font: inherit;
+  background: inherit;
+}
+
+.patient-family-request-form textarea {
+  resize: vertical;
+}
+
+.patient-family-full-width {
+  grid-column: 1 / -1;
+}
+
+.patient-family-form-actions {
+  grid-column: 1 / -1;
+}
+
+.patient-family-list {
+  display: grid;
+  gap: 12px;
+}
+
+.patient-family-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.patient-family-card > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.patient-family-card strong {
+  font-size: 1rem;
+}
+
+.patient-family-card span {
+  font-weight: 600;
+}
+
+.patient-family-card small {
+  color: #64748b;
+}
+
+.patient-family-card p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.patient-family-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.patient-dashboard-button.danger {
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+.patient-dashboard-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.patient-alert {
+  margin-bottom: 16px;
+  padding: 13px 16px;
+  border-radius: 10px;
+}
+
+.patient-alert.error {
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.07);
+}
+
+.patient-alert.success {
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  background: rgba(22, 163, 74, 0.07);
+}
+
+@media (max-width: 760px) {
+  .patient-family-request-form {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-family-full-width,
+  .patient-family-form-actions {
+    grid-column: auto;
+  }
+
+  .patient-family-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .patient-family-actions {
+    justify-content: flex-start;
+  }
+}

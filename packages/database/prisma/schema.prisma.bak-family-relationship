@@ -232,10 +232,6 @@ model User {
   patientAccessLogs                  PatientDataAccessLog[]
   patientRelationshipRequestsMade    PatientTenantRelationshipRequest[] @relation("PatientRelationshipRequestor")
   patientRelationshipRequestsHandled PatientTenantRelationshipRequest[] @relation("PatientRelationshipRequestResponder")
-  familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestCreator")
-  familyRelationshipRequestsHandled  PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestResponder")
-  familyRelationshipsCreated         PatientFamilyRelationship[]        @relation("FamilyRelationshipCreator")
-  familyRelationshipsRevoked         PatientFamilyRelationship[]        @relation("FamilyRelationshipRevoker")
   patientDeletionRequestsMade        PatientDeletionRequest[]           @relation("PatientDeletionRequester")
   patientDeletionRequestsReviewed    PatientDeletionRequest[]           @relation("PatientDeletionReviewer")
 
@@ -813,35 +809,6 @@ enum PatientDataSource {
   SYSTEM
 }
 
-enum PatientFamilyRelationshipType {
-  SPOUSE
-  PARENT
-  CHILD
-  SIBLING
-  GRANDPARENT
-  GRANDCHILD
-  GUARDIAN
-  DEPENDENT
-  OTHER
-}
-
-enum PatientFamilyRelationshipStatus {
-  PENDING
-  ACTIVE
-  DECLINED
-  CANCELLED
-  REVOKED
-  EXPIRED
-}
-
-enum PatientFamilyRelationshipRequestStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  CANCELLED
-  EXPIRED
-}
-
 model PatientProfile {
   id                String  @id @default(uuid()) @db.Uuid
   userId            String  @unique @db.Uuid
@@ -853,24 +820,20 @@ model PatientProfile {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  user                               User                               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  tenantRecords                      PatientTenantRecord[]
-  dataSubmissions                    PatientDataSubmission[]
-  accessRequests                     PatientAccessRequest[]
-  accessGrants                       PatientAccessGrant[]
-  accessLogs                         PatientDataAccessLog[]
-  deletionRequests                   PatientDeletionRequest[]
-  relationshipRequests               PatientTenantRelationshipRequest[]
-  familyRelationshipsInitiated       PatientFamilyRelationship[]        @relation("FamilyRelationshipSubject")
-  familyRelationshipsReceived        PatientFamilyRelationship[]        @relation("FamilyRelationshipRelated")
-  familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequester")
-  familyRelationshipRequestsReceived PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipTarget")
-  contact                            PatientContact?
-  emergencyContacts                  EmergencyContact[]
-  nextOfKin                          NextOfKin[]
-  addresses                          PatientAddress[]
-  insurances                         PatientInsurance[]
-  corporateProfile                   PatientCorporateProfile?
+  user                 User                               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenantRecords        PatientTenantRecord[]
+  dataSubmissions      PatientDataSubmission[]
+  accessRequests       PatientAccessRequest[]
+  accessGrants         PatientAccessGrant[]
+  accessLogs           PatientDataAccessLog[]
+  deletionRequests     PatientDeletionRequest[]
+  relationshipRequests PatientTenantRelationshipRequest[]
+  contact              PatientContact?
+  emergencyContacts    EmergencyContact[]
+  nextOfKin            NextOfKin[]
+  addresses            PatientAddress[]
+  insurances           PatientInsurance[]
+  corporateProfile     PatientCorporateProfile?
 
   @@index([firstName, secondName])
   @@index([location])
@@ -1145,65 +1108,6 @@ enum PatientDeletionRequestStatus {
 enum PatientDeletionRequesterType {
   PATIENT
   TENANT
-}
-
-model PatientFamilyRelationship {
-  id                      String                          @id @default(uuid()) @db.Uuid
-  patientProfileId        String                          @db.Uuid
-  relatedPatientProfileId String                          @db.Uuid
-  relationshipType        PatientFamilyRelationshipType
-  status                  PatientFamilyRelationshipStatus @default(PENDING)
-
-  createdByUserId String  @db.Uuid
-  revokedByUserId String? @db.Uuid
-
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
-  revokedAt DateTime? @db.Timestamptz(6)
-
-  patientProfile        PatientProfile @relation("FamilyRelationshipSubject", fields: [patientProfileId], references: [id], onDelete: Restrict)
-  relatedPatientProfile PatientProfile @relation("FamilyRelationshipRelated", fields: [relatedPatientProfileId], references: [id], onDelete: Restrict)
-  createdByUser         User           @relation("FamilyRelationshipCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  revokedByUser         User?          @relation("FamilyRelationshipRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
-
-  @@index([patientProfileId, status, relationshipType])
-  @@index([relatedPatientProfileId, status, relationshipType])
-  @@index([createdByUserId, createdAt])
-  @@index([revokedByUserId, revokedAt])
-  @@map("patient_family_relationships")
-}
-
-model PatientFamilyRelationshipRequest {
-  id                        String                                 @id @default(uuid()) @db.Uuid
-  requesterPatientProfileId String                                 @db.Uuid
-  targetPatientProfileId    String                                 @db.Uuid
-  relationshipType          PatientFamilyRelationshipType
-  status                    PatientFamilyRelationshipRequestStatus @default(PENDING)
-
-  requestedByUserId String  @db.Uuid
-  respondedByUserId String? @db.Uuid
-
-  reason         String? @db.VarChar(1000)
-  responseReason String? @db.VarChar(1000)
-
-  requestedAt DateTime  @default(now()) @db.Timestamptz(6)
-  respondedAt DateTime? @db.Timestamptz(6)
-  expiresAt   DateTime? @db.Timestamptz(6)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
-
-  requesterPatientProfile PatientProfile @relation("FamilyRelationshipRequester", fields: [requesterPatientProfileId], references: [id], onDelete: Restrict)
-  targetPatientProfile    PatientProfile @relation("FamilyRelationshipTarget", fields: [targetPatientProfileId], references: [id], onDelete: Restrict)
-
-  requestedByUser User  @relation("FamilyRelationshipRequestCreator", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  respondedByUser User? @relation("FamilyRelationshipRequestResponder", fields: [respondedByUserId], references: [id], onDelete: Restrict)
-
-  @@index([requesterPatientProfileId, status, createdAt])
-  @@index([targetPatientProfileId, status, createdAt])
-  @@index([requestedByUserId, createdAt])
-  @@index([respondedByUserId, respondedAt])
-  @@index([expiresAt])
-  @@map("patient_family_relationship_requests")
 }
 
 model PatientTenantRelationshipRequest {

@@ -15,6 +15,8 @@ import {
 } from './features/auth/api/auth-session.js';
 import { AuthenticatedDashboardPage } from './features/dashboard/pages/AuthenticatedDashboardPage.js';
 import { PatientDashboardPage } from './features/patient-dashboard/pages/PatientDashboardPage.js';
+import { PatientProfilePage } from './features/patient-profile/pages/PatientProfilePage.js';
+import { PatientFamilyPage } from './features/patient-family/pages/PatientFamilyPage.js';
 import './styles.css';
 
 type Route =
@@ -25,6 +27,8 @@ type Route =
   | { name: 'registration-dashboard' }
   | { name: 'authenticated-dashboard'; path: string }
   | { name: 'patient-dashboard' }
+  | { name: 'patient-profile' }
+  | { name: 'patient-family' }
   | { name: 'login' };
 
 function getRoute(): Route {
@@ -49,7 +53,15 @@ function getRoute(): Route {
     return { name: 'registration-dashboard' };
   }
 
-  if (path === '/patient/dashboard' || path.startsWith('/patient/')) {
+  if (path === '/patient/profile') {
+    return { name: 'patient-profile' };
+  }
+
+  if (path === '/patient/family') {
+    return { name: 'patient-family' };
+  }
+
+  if (path === '/patient/dashboard' || path === '/patient' || path.startsWith('/patient/')) {
     return { name: 'patient-dashboard' };
   }
 
@@ -227,6 +239,30 @@ function App() {
   if (route.name === 'patient-dashboard') {
     return (
       <PatientDashboardPage
+        onNavigate={navigate}
+        onLogout={() => {
+          clearAuthSession();
+          navigate('/login');
+        }}
+      />
+    );
+  }
+
+  if (route.name === 'patient-profile') {
+    return (
+      <PatientProfilePage
+        onNavigate={navigate}
+        onLogout={() => {
+          clearAuthSession();
+          navigate('/login');
+        }}
+      />
+    );
+  }
+
+  if (route.name === 'patient-family') {
+    return (
+      <PatientFamilyPage
         onNavigate={navigate}
         onLogout={() => {
           clearAuthSession();
