@@ -3,9 +3,19 @@ import {
   approvePatientRelationshipRequest,
   declinePatientRelationshipRequest,
   getMyPatientDashboard,
+  getMyPatientJourney,
 } from '../api/patient-dashboard.api.js';
+import {
+  acknowledgeMyQueueCall,
+  getMyNotifications,
+  markNotificationAsRead,
+} from '../../notifications/api/notifications.api.js';
+import { QueueCallAlert } from '../../notifications/components/QueueCallAlert.js';
+import { PatientNotificationBell } from '../../notifications/components/PatientNotificationBell.js';
+import { enableNotificationSound, playNotificationSound } from '../../notifications/utils/notification-sound.js';
 import type {
   PatientDashboardResponse,
+  PatientJourneyResponse,
   PatientRelationshipRequest,
 } from '../types/patient-dashboard.types.js';
 
@@ -119,9 +129,38 @@ export function PatientDashboardPage({
 }: PatientDashboardPageProps) {
   const [dashboard, setDashboard] =
     useState<PatientDashboardResponse | null>(null);
+  const [journey, setJourney] =
+    useState<PatientJourneyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+
+  const [notifications, setNotifications] = useState<
+    Awaited<ReturnType<typeof getMyNotifications>>
+  >([]);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
+  async function loadJourney(): Promise<void> {
+    try {
+      const response = await getMyPatientJourney();
+      setJourney(response);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to refresh your care journey.',
+      );
+    }
+  }
+
+  async function loadNotifications(): Promise<void> {
+    try {
+      const nextNotifications = await getMyNotifications(false);
+      setNotifications(nextNotifications);
+    } catch {
+      // Notification availability must not break the patient dashboard.
+    }
+  }
 
   async function loadDashboard(): Promise<void> {
     setLoading(true);
@@ -130,6 +169,7 @@ export function PatientDashboardPage({
     try {
       const response = await getMyPatientDashboard();
       setDashboard(response);
+      await loadJourney();
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -143,7 +183,71 @@ export function PatientDashboardPage({
 
   useEffect(() => {
     void loadDashboard();
+    void loadNotifications();
+
+    const interval = window.setInterval(() => {
+      void loadJourney();
+      void loadNotifications();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
   }, []);
+
+  async function enableSound(): Promise<void> {
+    try {
+      await enableNotificationSound();
+      setSoundEnabled(true);
+    } catch {
+      setSoundEnabled(false);
+    }
+  }
+
+  const queueCallNotification =
+    notifications.find(
+      (notification) =>
+        notification.type === 'QUEUE_PATIENT_CALLED' &&
+        notification.readAt === null,
+    ) ?? null;
+
+  const unreadCount = notifications.filter(
+    (notification) => notification.readAt === null,
+  ).length;
+
+  useEffect(() => {
+    if (!queueCallNotification || !soundEnabled) {
+      return;
+    }
+
+    void playNotificationSound();
+  }, [queueCallNotification?.id, soundEnabled]);
+
+  async function handleQueueCallAcknowledge(): Promise<void> {
+    if (!queueCallNotification) {
+      return;
+    }
+
+    const entryId = queueCallNotification.data?.queueEntryId;
+
+    if (typeof entryId !== 'string') {
+      await markNotificationAsRead(queueCallNotification.id);
+      await loadNotifications();
+      return;
+    }
+
+    try {
+      await acknowledgeMyQueueCall(entryId);
+      await markNotificationAsRead(queueCallNotification.id);
+      await loadNotifications();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to acknowledge the queue call.',
+      );
+    }
+  }
 
   async function handleApprove(requestId: string): Promise<void> {
     setBusyRequestId(requestId);
@@ -210,6 +314,27 @@ export function PatientDashboardPage({
 
   return (
     <div className="patient-app-shell">
+      {queueCallNotification ? (
+        <QueueCallAlert
+          notification={queueCallNotification}
+          onAcknowledge={() => void handleQueueCallAcknowledge()}
+        />
+      ) : null}
+
+      <div className="patient-dashboard-notification-controls">
+        <PatientNotificationBell
+          unreadCount={unreadCount}
+          onClick={() => void loadNotifications()}
+        />
+
+        <button
+          type="button"
+          className="patient-dashboard-button secondary"
+          onClick={() => void enableSound()}
+        >
+          {soundEnabled ? '🔊 Sound enabled' : '🔇 Enable sound'}
+        </button>
+      </div>
       <aside className="patient-sidebar">
         <div className="patient-sidebar-brand">
           <div className="patient-brand-mark">R</div>
@@ -347,6 +472,140 @@ export function PatientDashboardPage({
               <strong>{dashboard.patient.platformPatientId}</strong>
             </div>
           </section>
+
+          {journey?.data?.length ? (
+            <section className="patient-dashboard-section">
+              <div className="patient-dashboard-section-header">
+                <div>
+                  <p className="patient-dashboard-eyebrow">
+                    Live patient journey
+                  </p>
+                  <h2>Where you are now</h2>
+                </div>
+              </div>
+
+              {journey.data.map((activeJourney) => {
+                const current = activeJourney.current;
+                const queueEntry = current?.queueEntry;
+
+                return (
+                  <article
+                    className="patient-dashboard-card"
+                    key={activeJourney.journey.id}
+                  >
+                    <div>
+                      <p className="patient-dashboard-eyebrow">
+                        {activeJourney.journey.status === 'COMPLETED'
+                          ? 'Care journey complete'
+                          : 'Current step'}
+                      </p>
+
+                      <h2>
+                        {current?.department?.name ??
+                          current?.queue?.name ??
+                          current?.name ??
+                          'Treatment complete'}
+                      </h2>
+
+                      {current?.branch?.name ? (
+                        <p>{current.branch.name}</p>
+                      ) : null}
+
+                      {current?.location ? (
+                        <p>
+                          <strong>Where to go:</strong>{' '}
+                          {current.location}
+                        </p>
+                      ) : null}
+
+                      {current?.instruction ? (
+                        <p>
+                          <strong>What to do:</strong>{' '}
+                          {current.instruction}
+                        </p>
+                      ) : null}
+                      {current?.queueEntry?.reason ? (
+                        <p>
+                          <strong>Reason for visit:</strong>{' '}
+                          {current.queueEntry.reason}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="patient-dashboard-meta">
+                      {queueEntry ? (
+                        <>
+                          <span>
+                            Queue number: {queueEntry.queueNumber}
+                          </span>
+                          <span>
+                            {queueEntry.status === 'WAITING' ||
+                            queueEntry.status === 'CREATED'
+                              ? `Current position: ${queueEntry.position ?? 'Calculating'}`
+                              : queueEntry.status === 'CALLED'
+                                ? 'You have been called; proceed to the service point.'
+                                : 'Service is in progress.'}
+                          </span>
+                          <span>
+                            Status:{' '}
+                            {queueEntry.status.replaceAll('_', ' ')}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+
+                    {current?.estimatedWaitMinutes !== null &&
+                    current?.estimatedWaitMinutes !== undefined ? (
+                      <div className="patient-dashboard-meta">
+                        <span>
+                          Estimated wait:{' '}
+                          {current.estimatedWaitMinutes === 0
+                            ? 'You are being served'
+                            : `~${current.estimatedWaitMinutes} minutes`}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {activeJourney.next ? (
+                      <div className="patient-dashboard-meta">
+                        <span>
+                          Next: {activeJourney.next.department?.name ??
+                            activeJourney.next.name}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    <div className="patient-dashboard-meta">
+                      <strong>Care pathway</strong>
+                      <ol style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                        {activeJourney.steps.map((step) => (
+                          <li key={step.id} style={{ marginBottom: '0.35rem' }}>
+                            <span>
+                              {step.department?.name ?? step.name}
+                            </span>
+                            {' — '}
+                            <span>
+                              {step.status === 'COMPLETED'
+                                ? 'Completed'
+                                : step.id === current?.id
+                                  ? 'Active step'
+                                  : step.status.replaceAll('_', ' ')}
+                            </span>
+                            {step.queueEntry?.queueNumber &&
+                            step.id === current?.id ? (
+                              <span>
+                                {' · '}Queue {step.queueEntry.queueNumber}
+                              </span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          ) : null}
 
           <section className="patient-dashboard-grid">
             <article className="patient-dashboard-card">

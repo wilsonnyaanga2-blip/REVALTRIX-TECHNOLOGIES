@@ -16,6 +16,8 @@ import { BranchesPage } from '../../branches/components/BranchesPage.js';
 import { DepartmentsPage } from '../../departments/components/DepartmentsPage.js';
 import { ServicesPage } from '../../services/components/ServicesPage.js';
 import { PatientsPage } from '../../patients/components/PatientsPage.js';
+import { EncountersPage } from '../../encounters/components/EncountersPage.js';
+import { QueuePage } from '../../queues/components/QueuePage.js';
 import { clearAuthSession } from '../../auth/api/auth-session.js';
 
 interface AuthenticatedDashboardPageProps {
@@ -209,6 +211,14 @@ export function AuthenticatedDashboardPage({
 
     if (requestedPath === '/tenant/patients') {
       return <PatientsPage onNavigate={onNavigate} />;
+    }
+
+    if (requestedPath === '/tenant/encounters') {
+      return <EncountersPage onNavigate={onNavigate} />;
+    }
+
+    if (requestedPath === '/tenant/queue') {
+      return <QueuePage onNavigate={onNavigate} />;
     }
 
     if (

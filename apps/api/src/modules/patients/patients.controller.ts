@@ -34,6 +34,15 @@ export class PatientsController {
     );
   }
 
+  @Get('me/journey')
+  async getMyJourney(
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.patientsService.getMyJourney(
+      request.auth.userId,
+    );
+  }
+
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('patients', 'read')

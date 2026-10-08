@@ -41,10 +41,12 @@ export class EncountersController {
   async checkIn(
     @Req() request: AuthenticatedRequest,
     @Param('encounterId') encounterId: string,
+    @Body() dto: TransitionEncounterDto,
   ) {
     return this.encountersService.checkIn(
       request.auth.userId,
       encounterId,
+      dto,
     );
   }
 

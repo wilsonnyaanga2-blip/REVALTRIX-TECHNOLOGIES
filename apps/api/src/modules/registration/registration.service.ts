@@ -112,6 +112,7 @@ export class RegistrationService {
       const permissions = await tx.permission.findMany({
         where: {
           tenantId: null,
+          scope: 'TENANT',
           effect: 'ALLOW',
           status: 'ACTIVE',
         },

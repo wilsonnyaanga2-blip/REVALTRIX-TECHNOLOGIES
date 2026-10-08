@@ -39,6 +39,15 @@ export interface FamilyRelationship {
   patient: FamilyPatientSummary;
   relatedPatient: FamilyPatientSummary;
   direction: 'INCOMING' | 'OUTGOING';
+  dependentRegistration: {
+    id: string;
+    relationshipType: 'CHILD' | 'DEPENDENT';
+    status: DependentRegistrationStatus;
+    createdAt: string;
+    dateOfBirth: string | null;
+  } | null;
+  guardianVerification: GuardianAuthority | null;
+  patientCanRevoke: boolean;
 }
 
 export interface FamilyRelationshipRequest {
@@ -83,4 +92,83 @@ export interface FamilyRelationshipResponse {
 
 export interface FamilyRequestResponse {
   data: FamilyRelationshipRequest;
+}
+
+export type DependentRegistrationStatus =
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'REVOKED';
+
+export type GuardianAuthorityType =
+  | 'PARENT'
+  | 'LEGAL_GUARDIAN'
+  | 'CAREGIVER'
+  | 'AUTHORIZED_REPRESENTATIVE';
+
+export type GuardianAuthorityStatus =
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'REVOKED'
+  | 'EXPIRED';
+
+export type GuardianVerificationStatus =
+  | 'PENDING'
+  | 'VERIFIED'
+  | 'REJECTED'
+  | 'EXPIRED';
+
+export interface CreateDependentRegistrationRequest {
+  firstName: string;
+  secondName: string;
+  dateOfBirth: string;
+  relationshipType: 'CHILD' | 'DEPENDENT';
+  location?: string;
+  reason?: string;
+}
+
+export interface DependentRegistration {
+  id: string;
+  relationshipType: 'CHILD' | 'DEPENDENT';
+  status: DependentRegistrationStatus;
+  createdAt: string;
+}
+
+export interface GuardianAuthority {
+  id: string;
+  authorityType: GuardianAuthorityType;
+  status: GuardianAuthorityStatus;
+  verificationStatus: GuardianVerificationStatus;
+  startsAt: string;
+  expiresAt: string | null;
+}
+
+export interface RegisteredDependent {
+  id: string;
+  platformPatientId: string;
+  firstName: string;
+  secondName: string;
+  dateOfBirth: string | null;
+  location: string | null;
+}
+
+export interface RegisteredDependentRelationship {
+  id: string;
+  relationshipType: FamilyRelationshipType;
+  status: FamilyRelationshipStatus;
+  createdAt: string;
+  patientProfile: FamilyPatientSummary;
+  relatedPatientProfile: FamilyPatientSummary & {
+    dateOfBirth?: string | null;
+  };
+}
+
+export interface DependentRegistrationResult {
+  dependent: RegisteredDependent;
+  registration: DependentRegistration;
+  authority: GuardianAuthority;
+  relationship: RegisteredDependentRelationship;
+}
+
+export interface DependentRegistrationResponse {
+  data: DependentRegistrationResult;
 }

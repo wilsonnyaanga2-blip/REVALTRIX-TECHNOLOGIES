@@ -173,27 +173,42 @@ export class DepartmentsService {
       dto.parentId,
     );
 
-    return this.database.client.department.create({
-      data: {
-        tenantId,
-        name,
-        code,
-        organizationId:
-          dto.organizationId ?? null,
-        branchId: dto.branchId ?? null,
-        parentId: dto.parentId ?? null,
-      },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        status: true,
-        organizationId: true,
-        branchId: true,
-        parentId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    return this.database.client.$transaction(async (tx) => {
+      const department = await tx.department.create({
+        data: {
+          tenantId,
+          name,
+          code,
+          organizationId: dto.organizationId ?? null,
+          branchId: dto.branchId ?? null,
+          parentId: dto.parentId ?? null,
+        },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          status: true,
+          organizationId: true,
+          branchId: true,
+          parentId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await tx.queue.create({
+        data: {
+          tenantId,
+          branchId: department.branchId,
+          departmentId: department.id,
+          name: `${department.name} Queue`,
+          code: `D-${department.id}`,
+          description: `Automatically managed queue for ${department.name}.`,
+          status: 'ACTIVE',
+        },
+      });
+
+      return department;
     });
   }
 
@@ -295,43 +310,60 @@ export class DepartmentsService {
       );
     }
 
-    return this.database.client.department.update({
-      where: {
-        id: departmentId,
-      },
-      data,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        status: true,
-        organizationId: true,
-        branchId: true,
-        parentId: true,
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
+    return this.database.client.$transaction(async (tx) => {
+      const department = await tx.department.update({
+        where: {
+          id: departmentId,
         },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
+        data,
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          status: true,
+          organizationId: true,
+          branchId: true,
+          parentId: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
           },
-        },
-        parent: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
           },
+          parent: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+          createdAt: true,
+          updatedAt: true,
         },
-        createdAt: true,
-        updatedAt: true,
-      },
+      });
+
+      await tx.queue.updateMany({
+        where: {
+          tenantId,
+          departmentId: department.id,
+          code: `D-${department.id}`,
+        },
+        data: {
+          name: `${department.name} Queue`,
+          branchId: department.branchId,
+          description: `Automatically managed queue for ${department.name}.`,
+        },
+      });
+
+      return department;
     });
   }
 

@@ -9,7 +9,10 @@ export async function apiRequest<T>(
     ...options,
     headers: {
       Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.body &&
+      !(typeof FormData !== 'undefined' && options.body instanceof FormData)
+        ? { 'Content-Type': 'application/json' }
+        : {}),
       ...options.headers,
     },
   });

@@ -92,31 +92,41 @@ export class AuthorizationService {
       return false;
     }
 
-    const permissions = await this.database.client.permission.findMany({
-      where: {
-        resource: required.resource,
-        action: required.action,
-        status: 'ACTIVE',
-        OR: [
-          { tenantId: null },
-          { tenantId: context.tenantId },
-        ],
-        roles: {
-          some: {
-            roleId: { in: context.roleIds },
+    const permissions =
+      await this.database.client.permission.findMany({
+        where: {
+          resource: required.resource,
+          action: required.action,
+          scope: 'TENANT',
+          status: 'ACTIVE',
+          OR: [
+            { tenantId: null },
+            { tenantId: context.tenantId },
+          ],
+          roles: {
+            some: {
+              roleId: {
+                in: context.roleIds,
+              },
+            },
           },
         },
-      },
-      select: {
-        effect: true,
-      },
-    });
+        select: {
+          effect: true,
+        },
+      });
 
-    if (permissions.some((permission) => permission.effect === 'DENY')) {
+    if (
+      permissions.some(
+        (permission) => permission.effect === 'DENY',
+      )
+    ) {
       return false;
     }
 
-    return permissions.some((permission) => permission.effect === 'ALLOW');
+    return permissions.some(
+      (permission) => permission.effect === 'ALLOW',
+    );
   }
 
   async assertPermission(
@@ -136,6 +146,7 @@ export class AuthorizationService {
         where: {
           resource: required.resource,
           action: required.action,
+          scope: 'TENANT',
           status: 'ACTIVE',
           OR: [
             {
@@ -179,5 +190,103 @@ export class AuthorizationService {
     }
 
     return context;
+  }
+
+  async hasPlatformPermission(
+    userId: string,
+    required: RequiredPermission,
+  ): Promise<boolean> {
+    const permissions =
+      await this.database.client.permission.findMany({
+        where: {
+          resource: required.resource,
+          action: required.action,
+          scope: 'PLATFORM',
+          tenantId: null,
+          status: 'ACTIVE',
+          roles: {
+            some: {
+              role: {
+                tenantId: null,
+                scope: 'PLATFORM',
+                status: 'ACTIVE',
+                platformAssignments: {
+                  some: {
+                    userId,
+                  },
+                },
+              },
+            },
+          },
+        },
+        select: {
+          effect: true,
+        },
+      });
+
+    if (
+      permissions.some(
+        (permission) => permission.effect === 'DENY',
+      )
+    ) {
+      return false;
+    }
+
+    return permissions.some(
+      (permission) => permission.effect === 'ALLOW',
+    );
+  }
+
+  async assertPlatformPermission(
+    userId: string,
+    required: RequiredPermission,
+  ): Promise<void> {
+    const permissions =
+      await this.database.client.permission.findMany({
+        where: {
+          resource: required.resource,
+          action: required.action,
+          scope: 'PLATFORM',
+          tenantId: null,
+          status: 'ACTIVE',
+          roles: {
+            some: {
+              role: {
+                tenantId: null,
+                scope: 'PLATFORM',
+                status: 'ACTIVE',
+                platformAssignments: {
+                  some: {
+                    userId,
+                  },
+                },
+              },
+            },
+          },
+        },
+        select: {
+          effect: true,
+        },
+      });
+
+    if (
+      permissions.some(
+        (permission) => permission.effect === 'DENY',
+      )
+    ) {
+      throw new ForbiddenException(
+        'Platform permission denied',
+      );
+    }
+
+    if (
+      !permissions.some(
+        (permission) => permission.effect === 'ALLOW',
+      )
+    ) {
+      throw new ForbiddenException(
+        'Platform permission denied',
+      );
+    }
   }
 }

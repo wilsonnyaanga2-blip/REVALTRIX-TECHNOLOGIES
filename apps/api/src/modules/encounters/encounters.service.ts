@@ -5,23 +5,32 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import crypto from 'node:crypto';
-import { EncounterStatus, Prisma, RecordStatus } from '@prisma/client';
+import {
+  EncounterStatus,
+  Prisma,
+  QueueEntryStatus,
+  RecordStatus,
+} from '@prisma/client';
 import { DatabaseService } from '../../database/database.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import { CreateEncounterDto } from './dto/create-encounter.dto.js';
 import { EncounterQueryDto } from './dto/encounter-query.dto.js';
 import { TransitionEncounterDto } from './dto/transition-encounter.dto.js';
+import { QueuesService } from '../queues/queues.service.js';
 
 @Injectable()
 export class EncountersService {
   constructor(
     private readonly database: DatabaseService,
     private readonly authorization: AuthorizationService,
+    private readonly queues: QueuesService,
   ) {}
 
   private encounterSelect() {
     return {
       id: true,
+      branchId: true,
+      departmentId: true,
       encounterNumber: true,
       type: true,
       status: true,
@@ -32,6 +41,42 @@ export class EncountersService {
       cancelledReason: true,
       createdAt: true,
       updatedAt: true,
+      queueEntries: {
+        where: {
+          status: {
+            in: [
+              QueueEntryStatus.CREATED,
+              QueueEntryStatus.WAITING,
+              QueueEntryStatus.CALLED,
+              QueueEntryStatus.IN_SERVICE,
+            ],
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 1,
+        select: {
+          id: true,
+          queueNumber: true,
+          status: true,
+          reason: true,
+          queue: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+            },
+          },
+        },
+      },
       patientTenantRecord: {
         select: {
           id: true,
@@ -177,7 +222,8 @@ export class EncountersService {
     const reason = dto.reason?.trim() || null;
 
     try {
-      return await this.database.client.$transaction(async (transaction) => {
+      return await this.database.client.$transaction(
+        async (transaction) => {
         const encounterNumber =
           `ENC-${new Date().getUTCFullYear()}-${crypto.randomUUID()
             .replace(/-/g, '')
@@ -234,7 +280,12 @@ export class EncountersService {
         });
 
         return encounter;
-      });
+        },
+        {
+          timeout: 30000,
+          maxWait: 15000,
+        },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -281,6 +332,8 @@ export class EncountersService {
             encounterNumber: true,
             status: true,
             branchId: true,
+            departmentId: true,
+            reason: true,
           },
         });
 
@@ -294,11 +347,77 @@ export class EncountersService {
           );
         }
 
+        let checkInDepartmentId: string | null = null;
+        let checkInReason: string | null = null;
+
+        if (toStatus === EncounterStatus.CHECKED_IN) {
+          checkInReason =
+            dto.reason?.trim() || encounter.reason?.trim() || null;
+          checkInDepartmentId =
+            dto.departmentId ??
+            encounter.departmentId ??
+            context.departmentId ??
+            null;
+
+          if (!checkInReason) {
+            throw new BadRequestException(
+              "Record the patient's presenting concern before check-in",
+            );
+          }
+
+          if (!checkInDepartmentId) {
+            throw new BadRequestException(
+              'Assign the patient to a treatment department before check-in',
+            );
+          }
+
+          const department = await transaction.department.findFirst({
+            where: {
+              id: checkInDepartmentId,
+              tenantId: context.tenantId,
+              status: RecordStatus.ACTIVE,
+              deletedAt: null,
+            },
+            select: {
+              id: true,
+              branchId: true,
+            },
+          });
+
+          if (!department) {
+            throw new BadRequestException(
+              'The selected treatment department is not active at this facility',
+            );
+          }
+
+          if (
+            encounter.branchId &&
+            department.branchId &&
+            encounter.branchId !== department.branchId
+          ) {
+            throw new BadRequestException(
+              'The selected department does not belong to this encounter branch',
+            );
+          }
+        }
+
         const now = new Date();
 
         const data: Prisma.EncounterUpdateInput = {
           status: toStatus,
         };
+
+        if (
+          toStatus === EncounterStatus.CHECKED_IN &&
+          checkInDepartmentId
+        ) {
+          data.reason = checkInReason;
+          data.department = {
+            connect: {
+              id: checkInDepartmentId,
+            },
+          };
+        }
 
         if (toStatus === EncounterStatus.IN_PROGRESS) {
           data.startedAt = now;
@@ -350,8 +469,30 @@ export class EncountersService {
           },
         });
 
+        if (toStatus === EncounterStatus.CHECKED_IN) {
+          await this.queues.autoQueueCheckedInEncounter(
+            transaction,
+            {
+              userId,
+              tenantId: context.tenantId,
+              encounterId: encounter.id,
+              patientTenantRecordId:
+                updated.patientTenantRecord.id,
+              branchId: updated.branch?.id ?? context.branchId ?? null,
+              departmentId: updated.department?.id ?? context.departmentId ?? null,
+              encounterType: updated.type,
+              reason: updated.reason,
+            },
+          );
+        }
+
         return updated;
-      });
+        },
+        {
+          timeout: 15000,
+          maxWait: 10000,
+        },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -364,12 +505,17 @@ export class EncountersService {
     }
   }
 
-  async checkIn(userId: string, encounterId: string) {
+  async checkIn(
+    userId: string,
+    encounterId: string,
+    dto: TransitionEncounterDto = {},
+  ) {
     return this.transition(
       userId,
       encounterId,
       [EncounterStatus.CREATED],
       EncounterStatus.CHECKED_IN,
+      dto,
     );
   }
 

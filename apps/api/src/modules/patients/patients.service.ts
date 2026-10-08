@@ -12,6 +12,7 @@ import type {
 import type { EnrollPatientDto } from './dto/enroll-patient.dto.js';
 import type { RegisterPatientDto } from './dto/register-patient.dto.js';
 import { VerificationService } from '../verification/verification.service.js';
+import { QueuesService } from '../queues/queues.service.js';
 
 @Injectable()
 export class PatientsService {
@@ -19,6 +20,7 @@ export class PatientsService {
     private readonly database: DatabaseService,
     private readonly authorizationService: AuthorizationService,
     private readonly verificationService: VerificationService,
+    private readonly queuesService: QueuesService,
   ) {}
 
   private async getContext(
@@ -87,12 +89,12 @@ export class PatientsService {
         user: {
           select: {
             id: true,
-            displayName: true,
-            status: true,
-            identities: {
-              where: {
-                status: 'ACTIVE',
-              },
+                displayName: true,
+                status: true,
+                identities: {
+                  where: {
+                    status: 'ACTIVE',
+                  },
               select: {
                 type: true,
                 verifiedAt: true,
@@ -234,6 +236,241 @@ export class PatientsService {
             displayName: request.requestedByUser.displayName,
           },
         })),
+    };
+  }
+
+  async getMyJourney(userId: string) {
+    const patient = await this.database.client.patientProfile.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        user: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!patient) {
+      throw new NotFoundException(
+        'Authenticated user is not a Revaltrix patient',
+      );
+    }
+
+    if (patient.user.status !== 'ACTIVE') {
+      throw new NotFoundException(
+        'Patient account is not active',
+      );
+    }
+
+    await this.queuesService.reconcilePatientJourneyEntries(userId);
+
+    const journeys = await this.database.client.patientJourney.findMany({
+      where: {
+        patientTenantRecord: {
+          patientProfileId: patient.id,
+          deletedAt: null,
+        },
+        status: {
+          in: ['ACTIVE', 'COMPLETED'],
+        },
+      },
+      orderBy: {
+        startedAt: 'desc',
+      },
+      take: 5,
+      select: {
+        id: true,
+        tenantId: true,
+        status: true,
+        startedAt: true,
+        encounterId: true,
+        steps: {
+          orderBy: {
+            sequence: 'asc',
+          },
+          select: {
+            id: true,
+            sequence: true,
+            type: true,
+            status: true,
+            name: true,
+            description: true,
+            location: true,
+            instruction: true,
+            estimatedWaitMinutes: true,
+            estimatedDurationMinutes: true,
+            readyAt: true,
+            startedAt: true,
+            completedAt: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+            queue: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+            queueEntry: {
+              select: {
+                id: true,
+                queueId: true,
+                queueNumber: true,
+                priority: true,
+                status: true,
+                position: true,
+                checkedInAt: true,
+                calledAt: true,
+                startedAt: true,
+                completedAt: true,
+                reason: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const queueScopes = journeys.flatMap((journey) => {
+      const queueIds = [
+        ...new Set(
+          journey.steps.flatMap((step) =>
+            step.queueEntry ? [step.queueEntry.queueId] : [],
+          ),
+        ),
+      ];
+
+      return queueIds.length
+        ? [{ tenantId: journey.tenantId, queueId: { in: queueIds } }]
+        : [];
+    });
+    const waitingEntries = queueScopes.length
+      ? await this.database.client.queueEntry.findMany({
+          where: {
+            OR: queueScopes,
+            status: {
+              in: ['CREATED', 'WAITING'],
+            },
+          },
+          orderBy: [
+            { queueId: 'asc' },
+            { position: 'asc' },
+            { createdAt: 'asc' },
+            { id: 'asc' },
+          ],
+          select: {
+            id: true,
+            queueId: true,
+          },
+        })
+      : [];
+    const currentPositions = new Map<string, number>();
+    const queuePositions = new Map<string, number>();
+
+    for (const entry of waitingEntries) {
+      const position = (queuePositions.get(entry.queueId) ?? 0) + 1;
+      queuePositions.set(entry.queueId, position);
+      currentPositions.set(entry.id, position);
+    }
+
+    return {
+      data: journeys.map((journey) => {
+        const steps = journey.steps.map((step) => {
+          if (!step.queueEntry) {
+            return step;
+          }
+
+          return {
+            ...step,
+            queueEntry: {
+              ...step.queueEntry,
+              position:
+                step.queueEntry.status === 'WAITING' ||
+                step.queueEntry.status === 'CREATED'
+                  ? currentPositions.get(step.queueEntry.id) ?? null
+                  : null,
+            },
+          };
+        });
+        const currentIndex = journey.steps.findIndex(
+          (step) =>
+            step.status !== 'COMPLETED' &&
+            step.status !== 'SKIPPED' &&
+            step.status !== 'CANCELLED',
+        );
+
+        const current =
+          currentIndex >= 0 ? steps[currentIndex] : null;
+
+        if (
+          current?.queueEntry &&
+          current.queueEntry.status !== 'COMPLETED' &&
+          current.queueEntry.status !== 'SKIPPED' &&
+          current.queueEntry.status !== 'CANCELLED'
+        ) {
+          const queueEntry = current.queueEntry;
+
+          if (
+            queueEntry.status === 'WAITING' ||
+            queueEntry.status === 'CREATED'
+          ) {
+            const position = queueEntry.position ?? 1;
+
+            current.estimatedWaitMinutes =
+              Math.max(position, 1) * 10;
+            current.estimatedDurationMinutes = 10;
+          } else if (
+            queueEntry.status === 'CALLED' ||
+            queueEntry.status === 'IN_SERVICE'
+          ) {
+            current.estimatedWaitMinutes = 0;
+            current.estimatedDurationMinutes = 10;
+          }
+        }
+
+        const next =
+          currentIndex >= 0
+            ? steps
+                .slice(currentIndex + 1)
+                .find(
+                  (step) =>
+                    step.status !== 'COMPLETED' &&
+                    step.status !== 'SKIPPED' &&
+                    step.status !== 'CANCELLED',
+                ) ?? null
+            : null;
+
+        return {
+          journey: {
+            id: journey.id,
+            status: journey.status,
+            startedAt: journey.startedAt,
+            encounterId: journey.encounterId,
+          },
+          current,
+          next,
+          future: next
+            ? steps.filter(
+                (step) => step.sequence > next.sequence,
+              )
+            : [],
+          steps,
+        };
+      }),
     };
   }
 

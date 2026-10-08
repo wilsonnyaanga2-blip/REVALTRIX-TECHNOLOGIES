@@ -12,6 +12,7 @@ import {
 import type { AuthenticatedRequest } from '../core/authentication/guards/access-token.guard.js';
 import { AccessTokenGuard } from '../core/authentication/guards/access-token.guard.js';
 import { CreateFamilyRelationshipRequestDto } from './dto/create-family-relationship-request.dto.js';
+import { CreateDependentRegistrationDto } from './dto/create-dependent-registration.dto.js';
 import { RespondFamilyRelationshipRequestDto } from './dto/respond-family-relationship-request.dto.js';
 import { RevokeFamilyRelationshipDto } from './dto/revoke-family-relationship.dto.js';
 import { PatientFamilyService } from './patient-family.service.js';
@@ -38,6 +39,17 @@ export class PatientFamilyController {
   ) {
     return this.patientFamilyService.listPendingRequests(
       request.auth.userId,
+    );
+  }
+
+  @Post('dependents')
+  async registerDependent(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreateDependentRegistrationDto,
+  ) {
+    return this.patientFamilyService.registerDependent(
+      request.auth.userId,
+      dto,
     );
   }
 

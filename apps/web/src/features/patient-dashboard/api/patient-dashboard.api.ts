@@ -1,5 +1,8 @@
 import { authenticatedApiRequest } from '../../../lib/auth-api.js';
-import type { PatientDashboardResponse } from '../types/patient-dashboard.types.js';
+import type {
+  PatientDashboardResponse,
+  PatientJourneyResponse,
+} from '../types/patient-dashboard.types.js';
 
 export async function getMyPatientDashboard(): Promise<PatientDashboardResponse> {
   return authenticatedApiRequest<PatientDashboardResponse>(
@@ -30,5 +33,11 @@ export async function declinePatientRelationshipRequest(
         reason: reason?.trim() || undefined,
       }),
     },
+  );
+}
+
+export async function getMyPatientJourney(): Promise<PatientJourneyResponse> {
+  return authenticatedApiRequest<PatientJourneyResponse>(
+    '/v1/patients/me/journey',
   );
 }

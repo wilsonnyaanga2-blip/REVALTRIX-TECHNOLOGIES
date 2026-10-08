@@ -1,0 +1,1425 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum PatientTenantRecordStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantType {
+  HOSPITAL
+  CLINIC
+  SPECIALIST_PRACTICE
+  MEDICAL_CENTER
+  DIAGNOSTIC_CENTER
+  LABORATORY
+  RADIOLOGY_CENTER
+  PHARMACY
+  DENTAL_CLINIC
+  OPTICAL_CENTER
+  MATERNITY_CENTER
+  REHABILITATION_CENTER
+  HOME_HEALTH_PROVIDER
+  AMBULANCE_PROVIDER
+  HEALTHCARE_NETWORK
+  CORPORATE_HEALTH_PROVIDER
+  INSURER
+  EXTERNAL_PROVIDER
+  OTHER_HEALTHCARE_PROVIDER
+}
+
+enum ProviderType {
+  PHYSICIAN
+  DENTIST
+  NURSE
+  MIDWIFE
+  CLINICAL_OFFICER
+  PHARMACIST
+  PHARMACY_TECHNICIAN
+  LABORATORY_SCIENTIST
+  LABORATORY_TECHNICIAN
+  RADIOLOGIST
+  RADIOGRAPHER
+  SONOGRAPHER
+  PHYSIOTHERAPIST
+  OCCUPATIONAL_THERAPIST
+  NUTRITIONIST
+  DIETITIAN
+  PSYCHOLOGIST
+  COUNSELLOR
+  OPTOMETRIST
+  OPTICIAN
+  ANESTHESIOLOGIST
+  SURGEON
+  SPECIALIST
+  PARAMEDIC
+  OTHER
+}
+
+enum OrganizationType {
+  HOSPITAL
+  CLINIC
+  DEPARTMENTAL_UNIT
+  CORPORATE
+  INSURER
+  PARTNER
+  OTHER
+}
+
+enum IdentityType {
+  EMAIL
+  PHONE
+  NATIONAL_ID
+  PASSPORT
+  EXTERNAL
+}
+
+enum RegistrationType {
+  TENANT
+  PATIENT
+}
+
+enum RegistrationStatus {
+  INITIATED
+  VERIFICATION_REQUIRED
+  ONBOARDING
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum VerificationStatus {
+  PENDING
+  PARTIALLY_VERIFIED
+  VERIFIED
+  FAILED
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  EXPIRED
+}
+
+enum RoleScope {
+  PLATFORM
+  TENANT
+  ORGANIZATION
+  BRANCH
+  DEPARTMENT
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum DeviceStatus {
+  ACTIVE
+  REVOKED
+  BLOCKED
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum TenantSetupStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  READY
+  BLOCKED
+  LIVE
+  SUSPENDED
+}
+
+enum TenantDocumentStatus {
+  DRAFT
+  UPLOADED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+  REPLACED
+}
+
+enum TenantDocumentVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum TenantDocumentType {
+  REGISTRATION_CERTIFICATE
+  INCORPORATION_CERTIFICATE
+  BUSINESS_PERMIT
+  HEALTHCARE_FACILITY_LICENSE
+  PROFESSIONAL_LICENSE
+  TAX_CERTIFICATE
+  INSURANCE_CERTIFICATE
+  ACCREDITATION_CERTIFICATE
+  MEDICAL_WASTE_CERTIFICATE
+  FIRE_SAFETY_CERTIFICATE
+  RADIATION_LICENSE
+  PHARMACY_LICENSE
+  LABORATORY_LICENSE
+  AMBULANCE_LICENSE
+  PRIVACY_DATA_PROTECTION_DOCUMENT
+  OTHER
+}
+
+model User {
+  id          String       @id @default(uuid()) @db.Uuid
+  username    String?      @unique @db.VarChar(100)
+  displayName String       @db.VarChar(200)
+  status      RecordStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  identities                         Identity[]
+  memberships                        Membership[]
+  sessions                           Session[]
+  devices                            Device[]
+  apiKeys                            ApiKey[]
+  patientProfile                     PatientProfile?
+  registrations                      Registration[]
+  registrationSessions               RegistrationSession[]
+  verificationChallenges             VerificationChallenge[]
+  auditEvents                        AuditEvent[]                       @relation("AuditActor")
+  securityEvents                     SecurityEvent[]                    @relation("SecurityActor")
+  createdPatientRecords              PatientTenantRecord[]              @relation("PatientRecordCreator")
+  patientDataSubmissions             PatientDataSubmission[]            @relation("PatientDataSubmitter")
+  providerProfiles                   ProviderProfile[]
+  encountersCreated                  Encounter[]                        @relation("EncounterCreator")
+  encountersStatusChanged            EncounterStatusHistory[]           @relation("EncounterStatusChanger")
+  patientAccessRequestsMade          PatientAccessRequest[]             @relation("PatientAccessRequestor")
+  patientAccessRequestsReviewed      PatientAccessRequest[]             @relation("PatientAccessRequestReviewer")
+  patientAccessGrantsCreated         PatientAccessGrant[]               @relation("PatientAccessGrantCreator")
+  patientAccessLogs                  PatientDataAccessLog[]
+  patientRelationshipRequestsMade    PatientTenantRelationshipRequest[] @relation("PatientRelationshipRequestor")
+  patientRelationshipRequestsHandled PatientTenantRelationshipRequest[] @relation("PatientRelationshipRequestResponder")
+  familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestCreator")
+  familyRelationshipRequestsHandled  PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestResponder")
+  familyRelationshipsCreated         PatientFamilyRelationship[]        @relation("FamilyRelationshipCreator")
+  familyRelationshipsRevoked         PatientFamilyRelationship[]        @relation("FamilyRelationshipRevoker")
+  patientDeletionRequestsMade        PatientDeletionRequest[]           @relation("PatientDeletionRequester")
+  patientDeletionRequestsReviewed    PatientDeletionRequest[]           @relation("PatientDeletionReviewer")
+
+  patientContactRecordsCreated    PatientContact[]          @relation("PatientContactCreator")
+  patientContactRecordsUpdated    PatientContact[]          @relation("PatientContactUpdater")
+  emergencyContactsCreated        EmergencyContact[]        @relation("EmergencyContactCreator")
+  emergencyContactsUpdated        EmergencyContact[]        @relation("EmergencyContactUpdater")
+  nextOfKinRecordsCreated         NextOfKin[]               @relation("NextOfKinCreator")
+  nextOfKinRecordsUpdated         NextOfKin[]               @relation("NextOfKinUpdater")
+  patientAddressesCreated         PatientAddress[]          @relation("PatientAddressCreator")
+  patientAddressesUpdated         PatientAddress[]          @relation("PatientAddressUpdater")
+  patientInsurancesCreated        PatientInsurance[]        @relation("PatientInsuranceCreator")
+  patientInsurancesUpdated        PatientInsurance[]        @relation("PatientInsuranceUpdater")
+  patientCorporateProfilesCreated PatientCorporateProfile[] @relation("PatientCorporateProfileCreator")
+  patientCorporateProfilesUpdated PatientCorporateProfile[] @relation("PatientCorporateProfileUpdater")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Identity {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @db.Uuid
+  type            IdentityType
+  value           String       @db.VarChar(320)
+  normalizedValue String       @db.VarChar(320)
+  credentialHash  String?      @db.VarChar(512)
+  verifiedAt      DateTime?    @db.Timestamptz(6)
+  status          RecordStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([type, normalizedValue])
+  @@index([userId])
+  @@index([type, normalizedValue])
+  @@map("identities")
+}
+
+model ProviderProfile {
+  id                 String       @id @default(uuid()) @db.Uuid
+  tenantId           String       @db.Uuid
+  userId             String       @db.Uuid
+  providerNumber     String       @db.VarChar(100)
+  providerType       ProviderType
+  professionalTitle  String?      @db.VarChar(150)
+  specialty          String?      @db.VarChar(200)
+  subspecialty       String?      @db.VarChar(200)
+  registrationNumber String?      @db.VarChar(150)
+  registrationBody   String?      @db.VarChar(200)
+  licenseNumber      String?      @db.VarChar(150)
+  licenseExpiryDate  DateTime?    @db.Date
+  status             RecordStatus @default(ACTIVE)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?    @db.Timestamptz(6)
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  encounters Encounter[]
+
+  @@unique([tenantId, userId])
+  @@unique([tenantId, providerNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, providerType])
+  @@index([userId, status])
+  @@index([tenantId, specialty])
+  @@map("provider_profiles")
+}
+
+model Encounter {
+  id                    String  @id @default(uuid()) @db.Uuid
+  tenantId              String  @db.Uuid
+  patientTenantRecordId String  @db.Uuid
+  providerId            String? @db.Uuid
+  branchId              String? @db.Uuid
+  departmentId          String? @db.Uuid
+  createdByUserId       String  @db.Uuid
+
+  encounterNumber String          @db.VarChar(100)
+  type            EncounterType
+  status          EncounterStatus @default(DRAFT)
+  reason          String?         @db.VarChar(1000)
+
+  startedAt       DateTime? @db.Timestamptz(6)
+  completedAt     DateTime? @db.Timestamptz(6)
+  cancelledAt     DateTime? @db.Timestamptz(6)
+  cancelledReason String?   @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord      @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  provider            ProviderProfile?         @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  branch              Branch?                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  department          Department?              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdByUser       User                     @relation("EncounterCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  statusHistory       EncounterStatusHistory[]
+
+  @@unique([tenantId, encounterNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, patientTenantRecordId, createdAt])
+  @@index([tenantId, providerId, status])
+  @@index([tenantId, branchId, status])
+  @@index([tenantId, departmentId, status])
+  @@index([createdByUserId])
+  @@map("encounters")
+}
+
+model EncounterStatusHistory {
+  id              String           @id @default(uuid()) @db.Uuid
+  encounterId     String           @db.Uuid
+  tenantId        String           @db.Uuid
+  fromStatus      EncounterStatus?
+  toStatus        EncounterStatus
+  changedByUserId String           @db.Uuid
+  reason          String?          @db.VarChar(500)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+
+  encounter     Encounter @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  changedByUser User      @relation("EncounterStatusChanger", fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([encounterId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([changedByUserId, createdAt])
+  @@map("encounter_status_history")
+}
+
+model Tenant {
+  id        String       @id @default(uuid()) @db.Uuid
+  type      TenantType
+  name      String       @db.VarChar(200)
+  legalName String?      @db.VarChar(300)
+  code      String       @unique @db.VarChar(50)
+  status    RecordStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  organizations               Organization[]
+  branches                    Branch[]
+  departments                 Department[]
+  memberships                 Membership[]
+  roles                       Role[]
+  permissions                 Permission[]
+  registrations               Registration[]
+  profile                     TenantProfile?
+  setup                       TenantSetup?
+  documents                   TenantDocument[]
+  services                    Service[]
+  patientRecords              PatientTenantRecord[]
+  providers                   ProviderProfile[]
+  auditEvents                 AuditEvent[]
+  securityEvents              SecurityEvent[]
+  patientDataSubmissions      PatientDataSubmission[]
+  encounters                  Encounter[]
+  encounterStatusHistory      EncounterStatusHistory[]
+  patientAccessRequests       PatientAccessRequest[]
+  patientAccessGrants         PatientAccessGrant[]
+  patientAccessLogs           PatientDataAccessLog[]
+  patientDeletionRequests     PatientDeletionRequest[]
+  patientRelationshipRequests PatientTenantRelationshipRequest[]
+
+  @@index([type])
+  @@index([status])
+  @@map("tenants")
+}
+
+model TenantProfile {
+  id                      String  @id @default(uuid()) @db.Uuid
+  tenantId                String  @unique @db.Uuid
+  businessName            String? @db.VarChar(200)
+  legalName               String? @db.VarChar(300)
+  registrationNumber      String? @db.VarChar(150)
+  taxIdentificationNumber String? @db.VarChar(150)
+  country                 String  @db.VarChar(100)
+  county                  String? @db.VarChar(100)
+  subcounty               String? @db.VarChar(100)
+  address                 String? @db.VarChar(500)
+  postalCode              String? @db.VarChar(30)
+  website                 String? @db.VarChar(500)
+  contactEmail            String? @db.VarChar(320)
+  contactPhone            String? @db.VarChar(50)
+  description             String? @db.VarChar(1000)
+  ownershipType           String? @db.VarChar(100)
+  parentOrganizationId    String? @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([country])
+  @@index([county])
+  @@map("tenant_profiles")
+}
+
+model TenantSetup {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenantId         String            @unique @db.Uuid
+  status           TenantSetupStatus @default(NOT_STARTED)
+  readinessPercent Int               @default(0)
+  readyAt          DateTime?         @db.Timestamptz(6)
+  liveAt           DateTime?         @db.Timestamptz(6)
+  suspendedAt      DateTime?         @db.Timestamptz(6)
+  lastCalculatedAt DateTime?         @db.Timestamptz(6)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@map("tenant_setups")
+}
+
+model TenantDocument {
+  id                 String                           @id @default(uuid()) @db.Uuid
+  tenantId           String                           @db.Uuid
+  type               TenantDocumentType
+  status             TenantDocumentStatus             @default(DRAFT)
+  verificationStatus TenantDocumentVerificationStatus @default(PENDING)
+  title              String                           @db.VarChar(200)
+  documentNumber     String?                          @db.VarChar(150)
+  issuingAuthority   String?                          @db.VarChar(200)
+  issueDate          DateTime?                        @db.Date
+  expiryDate         DateTime?                        @db.Date
+  version            Int                              @default(1)
+  storageKey         String?                          @db.VarChar(1000)
+  fileName           String?                          @db.VarChar(255)
+  mimeType           String?                          @db.VarChar(150)
+  fileSizeBytes      BigInt?
+  checksum           String?                          @db.VarChar(128)
+  uploadedByUserId   String?                          @db.Uuid
+  verifiedByUserId   String?                          @db.Uuid
+  verifiedAt         DateTime?                        @db.Timestamptz(6)
+  rejectionReason    String?                          @db.VarChar(1000)
+  createdAt          DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                         @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, type, status])
+  @@index([tenantId, expiryDate])
+  @@index([tenantId, verificationStatus])
+  @@index([storageKey])
+  @@map("tenant_documents")
+}
+
+model Service {
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String       @db.Uuid
+  departmentId String?      @db.Uuid
+  branchId     String?      @db.Uuid
+  name         String       @db.VarChar(200)
+  code         String       @db.VarChar(50)
+  description  String?      @db.VarChar(1000)
+  category     String?      @db.VarChar(100)
+  durationMin  Int?
+  status       RecordStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  branch     Branch?     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@index([tenantId, departmentId])
+  @@index([tenantId, branchId])
+  @@index([departmentId])
+  @@index([branchId])
+  @@map("services")
+}
+
+model Organization {
+  id       String           @id @default(uuid()) @db.Uuid
+  tenantId String           @db.Uuid
+  parentId String?          @db.Uuid
+  type     OrganizationType
+  name     String           @db.VarChar(200)
+  code     String           @db.VarChar(50)
+  status   RecordStatus     @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  parent      Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Organization[] @relation("OrganizationHierarchy")
+  branches    Branch[]
+  departments Department[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([parentId])
+  @@index([status])
+  @@map("organizations")
+}
+
+model Branch {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @db.Uuid
+  organizationId String?      @db.Uuid
+  name           String       @db.VarChar(200)
+  code           String       @db.VarChar(50)
+  status         RecordStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  departments  Department[]
+  memberships  Membership[]
+  auditEvents  AuditEvent[]
+  services     Service[]
+  encounters   Encounter[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("branches")
+}
+
+model Department {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @db.Uuid
+  organizationId String?      @db.Uuid
+  branchId       String?      @db.Uuid
+  parentId       String?      @db.Uuid
+  name           String       @db.VarChar(200)
+  code           String       @db.VarChar(50)
+  status         RecordStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  parent       Department?   @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children     Department[]  @relation("DepartmentHierarchy")
+  memberships  Membership[]
+  services     Service[]
+  encounters   Encounter[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([branchId])
+  @@index([parentId])
+  @@index([status])
+  @@map("departments")
+}
+
+model Membership {
+  id           String           @id @default(uuid()) @db.Uuid
+  userId       String           @db.Uuid
+  tenantId     String           @db.Uuid
+  branchId     String?          @db.Uuid
+  departmentId String?          @db.Uuid
+  status       MembershipStatus @default(ACTIVE)
+
+  startsAt  DateTime  @default(now()) @db.Timestamptz(6)
+  endsAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch     Branch?          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  department Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  roles      MembershipRole[]
+
+  @@unique([userId, tenantId, branchId, departmentId])
+  @@index([tenantId, status])
+  @@index([userId, status])
+  @@index([branchId])
+  @@index([departmentId])
+  @@map("memberships")
+}
+
+model Role {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String?      @db.Uuid
+  name        String       @db.VarChar(100)
+  code        String       @db.VarChar(100)
+  scope       RoleScope
+  description String?      @db.VarChar(500)
+  status      RecordStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant      Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  permissions RolePermission[]
+  memberships MembershipRole[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, scope])
+  @@index([status])
+  @@map("roles")
+}
+
+model MembershipRole {
+  membershipId String   @db.Uuid
+  roleId       String   @db.Uuid
+  assignedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([membershipId, roleId])
+  @@index([roleId])
+  @@map("membership_roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String?          @db.Uuid
+  resource    String           @db.VarChar(150)
+  action      String           @db.VarChar(100)
+  effect      PermissionEffect @default(ALLOW)
+  description String?          @db.VarChar(500)
+  status      RecordStatus     @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  roles  RolePermission[]
+
+  @@unique([tenantId, resource, action, effect])
+  @@index([tenantId, resource])
+  @@index([status])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String   @db.Uuid
+  permissionId String   @db.Uuid
+  assignedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  deviceId       String?       @db.Uuid
+  tokenHash      String        @unique @db.VarChar(128)
+  status         SessionStatus @default(ACTIVE)
+  expiresAt      DateTime      @db.Timestamptz(6)
+  lastActivityAt DateTime      @default(now()) @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  revokedAt      DateTime?     @db.Timestamptz(6)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Device {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @db.Uuid
+  fingerprintHash String       @unique @db.VarChar(128)
+  name            String?      @db.VarChar(150)
+  platform        String?      @db.VarChar(50)
+  status          DeviceStatus @default(ACTIVE)
+  lastSeenAt      DateTime?    @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  revokedAt       DateTime?    @db.Timestamptz(6)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sessions Session[]
+
+  @@index([userId, status])
+  @@map("devices")
+}
+
+model ApiKey {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @db.Uuid
+  name       String       @db.VarChar(150)
+  keyPrefix  String       @db.VarChar(20)
+  keyHash    String       @unique @db.VarChar(128)
+  status     ApiKeyStatus @default(ACTIVE)
+  expiresAt  DateTime?    @db.Timestamptz(6)
+  lastUsedAt DateTime?    @db.Timestamptz(6)
+  createdAt  DateTime     @default(now()) @db.Timestamptz(6)
+  revokedAt  DateTime?    @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+model AuditEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String?  @db.Uuid
+  actorUserId   String?  @db.Uuid
+  branchId      String?  @db.Uuid
+  action        String   @db.VarChar(150)
+  resourceType  String   @db.VarChar(100)
+  resourceId    String?  @db.VarChar(100)
+  outcome       String   @db.VarChar(50)
+  reason        String?  @db.VarChar(500)
+  correlationId String?  @db.VarChar(100)
+  ipAddress     String?  @db.VarChar(45)
+  userAgent     String?  @db.VarChar(1000)
+  metadata      Json?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actorUser User?   @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  branch    Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([correlationId])
+  @@map("audit_events")
+}
+
+model SecurityEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String?  @db.Uuid
+  actorUserId String?  @db.Uuid
+  eventType   String   @db.VarChar(150)
+  severity    String   @db.VarChar(30)
+  outcome     String   @db.VarChar(50)
+  ipAddress   String?  @db.VarChar(45)
+  userAgent   String?  @db.VarChar(1000)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actorUser User?   @relation("SecurityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([severity, createdAt])
+  @@map("security_events")
+}
+
+enum PatientDataSource {
+  PATIENT
+  FACILITY_STAFF
+  IMPORT
+  INTEGRATION
+  SYSTEM
+}
+
+enum PatientFamilyRelationshipType {
+  SPOUSE
+  PARENT
+  CHILD
+  SIBLING
+  GRANDPARENT
+  GRANDCHILD
+  GUARDIAN
+  DEPENDENT
+  OTHER
+}
+
+enum PatientFamilyRelationshipStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  CANCELLED
+  REVOKED
+  EXPIRED
+}
+
+enum PatientFamilyRelationshipRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+model PatientProfile {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @unique @db.Uuid
+  platformPatientId String  @unique @default(cuid()) @db.VarChar(50)
+  firstName         String  @db.VarChar(100)
+  secondName        String  @db.VarChar(100)
+  location          String? @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user                               User                               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenantRecords                      PatientTenantRecord[]
+  dataSubmissions                    PatientDataSubmission[]
+  accessRequests                     PatientAccessRequest[]
+  accessGrants                       PatientAccessGrant[]
+  accessLogs                         PatientDataAccessLog[]
+  deletionRequests                   PatientDeletionRequest[]
+  relationshipRequests               PatientTenantRelationshipRequest[]
+  familyRelationshipsInitiated       PatientFamilyRelationship[]        @relation("FamilyRelationshipSubject")
+  familyRelationshipsReceived        PatientFamilyRelationship[]        @relation("FamilyRelationshipRelated")
+  familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequester")
+  familyRelationshipRequestsReceived PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipTarget")
+  contact                            PatientContact?
+  emergencyContacts                  EmergencyContact[]
+  nextOfKin                          NextOfKin[]
+  addresses                          PatientAddress[]
+  insurances                         PatientInsurance[]
+  corporateProfile                   PatientCorporateProfile?
+
+  @@index([firstName, secondName])
+  @@index([location])
+  @@map("patient_profiles")
+}
+
+model PatientContact {
+  id               String            @id @default(uuid()) @db.Uuid
+  patientProfileId String            @unique @db.Uuid
+  phone            String?           @db.VarChar(30)
+  alternativePhone String?           @db.VarChar(30)
+  email            String?           @db.VarChar(320)
+  status           RecordStatus      @default(ACTIVE)
+  source           PatientDataSource @default(PATIENT)
+  createdByUserId  String?           @db.Uuid
+  updatedByUserId  String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?         @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  createdByUser  User?          @relation("PatientContactCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser  User?          @relation("PatientContactUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("patient_contacts")
+}
+
+model EmergencyContact {
+  id               String            @id @default(uuid()) @db.Uuid
+  patientProfileId String            @db.Uuid
+  name             String            @db.VarChar(200)
+  relationship     String            @db.VarChar(100)
+  phone            String            @db.VarChar(30)
+  alternativePhone String?           @db.VarChar(30)
+  status           RecordStatus      @default(ACTIVE)
+  source           PatientDataSource @default(PATIENT)
+  createdByUserId  String?           @db.Uuid
+  updatedByUserId  String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?         @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  createdByUser  User?          @relation("EmergencyContactCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser  User?          @relation("EmergencyContactUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("emergency_contacts")
+}
+
+model NextOfKin {
+  id               String            @id @default(uuid()) @db.Uuid
+  patientProfileId String            @db.Uuid
+  name             String            @db.VarChar(200)
+  relationship     String            @db.VarChar(100)
+  phone            String            @db.VarChar(30)
+  email            String?           @db.VarChar(320)
+  address          String?           @db.VarChar(500)
+  status           RecordStatus      @default(ACTIVE)
+  source           PatientDataSource @default(PATIENT)
+  createdByUserId  String?           @db.Uuid
+  updatedByUserId  String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?         @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  createdByUser  User?          @relation("NextOfKinCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser  User?          @relation("NextOfKinUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("next_of_kin")
+}
+
+model PatientAddress {
+  id               String            @id @default(uuid()) @db.Uuid
+  patientProfileId String            @db.Uuid
+  county           String?           @db.VarChar(100)
+  town             String?           @db.VarChar(100)
+  area             String?           @db.VarChar(150)
+  physicalAddress  String?           @db.VarChar(500)
+  postalAddress    String?           @db.VarChar(300)
+  isPrimary        Boolean           @default(false)
+  status           RecordStatus      @default(ACTIVE)
+  source           PatientDataSource @default(PATIENT)
+  createdByUserId  String?           @db.Uuid
+  updatedByUserId  String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?         @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  createdByUser  User?          @relation("PatientAddressCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser  User?          @relation("PatientAddressUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status])
+  @@index([patientProfileId, isPrimary])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("patient_addresses")
+}
+
+model PatientInsurance {
+  id                      String            @id @default(uuid()) @db.Uuid
+  patientProfileId        String            @db.Uuid
+  provider                String            @db.VarChar(200)
+  memberNumber            String?           @db.VarChar(100)
+  policyNumber            String?           @db.VarChar(100)
+  principalMember         String?           @db.VarChar(200)
+  relationshipToPrincipal String?           @db.VarChar(100)
+  validFrom               DateTime?         @db.Date
+  validUntil              DateTime?         @db.Date
+  status                  RecordStatus      @default(ACTIVE)
+  source                  PatientDataSource @default(PATIENT)
+  createdByUserId         String?           @db.Uuid
+  updatedByUserId         String?           @db.Uuid
+  createdAt               DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt               DateTime?         @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  createdByUser  User?          @relation("PatientInsuranceCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser  User?          @relation("PatientInsuranceUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status])
+  @@index([provider])
+  @@index([memberNumber])
+  @@index([policyNumber])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("patient_insurances")
+}
+
+model PatientCorporateProfile {
+  id                     String            @id @default(uuid()) @db.Uuid
+  patientProfileId       String            @unique @db.Uuid
+  company                String?           @db.VarChar(200)
+  employeeNumber         String?           @db.VarChar(100)
+  corporatePlan          String?           @db.VarChar(200)
+  eligibilityInformation Json?
+  status                 RecordStatus      @default(ACTIVE)
+  source                 PatientDataSource @default(PATIENT)
+  createdByUserId        String?           @db.Uuid
+  updatedByUserId        String?           @db.Uuid
+  createdAt              DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt              DateTime?         @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  createdByUser  User?          @relation("PatientCorporateProfileCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser  User?          @relation("PatientCorporateProfileUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("patient_corporate_profiles")
+}
+
+enum EncounterStatus {
+  DRAFT
+  CREATED
+  CHECKED_IN
+  TRIAGED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  REFERRED
+}
+
+enum EncounterType {
+  OUTPATIENT
+  INPATIENT
+  EMERGENCY
+  WALK_IN
+  FOLLOW_UP
+  PROCEDURE
+  TELEMEDICINE
+  HOME_CARE
+}
+
+model PatientTenantRecord {
+  id               String                    @id @default(uuid()) @db.Uuid
+  patientProfileId String                    @db.Uuid
+  tenantId         String                    @db.Uuid
+  patientNumber    String                    @db.VarChar(50)
+  status           PatientTenantRecordStatus @default(PENDING)
+  registeredAt     DateTime                  @default(now()) @db.Timestamptz(6)
+  createdByUserId  String?                   @db.Uuid
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  patientProfile        PatientProfile                     @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  tenant                Tenant                             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdByUser         User?                              @relation("PatientRecordCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  PatientDataSubmission PatientDataSubmission[]
+  encounters            Encounter[]
+  accessRequests        PatientAccessRequest[]
+  accessGrants          PatientAccessGrant[]
+  relationshipRequests  PatientTenantRelationshipRequest[]
+
+  @@unique([tenantId, patientProfileId])
+  @@unique([tenantId, patientNumber])
+  @@index([tenantId, status])
+  @@index([patientProfileId, status])
+  @@index([createdByUserId])
+  @@index([tenantId, createdAt])
+  @@map("patient_tenant_records")
+}
+
+model PatientDataSubmission {
+  id                    String   @id @default(uuid()) @db.Uuid
+  patientProfileId      String   @db.Uuid
+  patientTenantRecordId String?  @db.Uuid
+  tenantId              String   @db.Uuid
+  submittedByUserId     String?  @db.Uuid
+  source                String   @db.VarChar(50)
+  data                  Json
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+
+  patientProfile      PatientProfile       @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord? @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  submittedByUser     User?                @relation("PatientDataSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, createdAt])
+  @@index([patientTenantRecordId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([submittedByUserId, createdAt])
+  @@map("patient_data_submissions")
+}
+
+enum PatientTenantRelationshipRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+  EXPIRED
+}
+
+enum PatientAccessRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+  EXPIRED
+}
+
+enum PatientAccessGrantStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum PatientDeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum PatientDeletionRequesterType {
+  PATIENT
+  TENANT
+}
+
+model PatientFamilyRelationship {
+  id                      String                          @id @default(uuid()) @db.Uuid
+  patientProfileId        String                          @db.Uuid
+  relatedPatientProfileId String                          @db.Uuid
+  relationshipType        PatientFamilyRelationshipType
+  status                  PatientFamilyRelationshipStatus @default(PENDING)
+
+  createdByUserId String  @db.Uuid
+  revokedByUserId String? @db.Uuid
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  revokedAt DateTime? @db.Timestamptz(6)
+
+  patientProfile        PatientProfile @relation("FamilyRelationshipSubject", fields: [patientProfileId], references: [id], onDelete: Restrict)
+  relatedPatientProfile PatientProfile @relation("FamilyRelationshipRelated", fields: [relatedPatientProfileId], references: [id], onDelete: Restrict)
+  createdByUser         User           @relation("FamilyRelationshipCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revokedByUser         User?          @relation("FamilyRelationshipRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status, relationshipType])
+  @@index([relatedPatientProfileId, status, relationshipType])
+  @@index([createdByUserId, createdAt])
+  @@index([revokedByUserId, revokedAt])
+  @@map("patient_family_relationships")
+}
+
+model PatientFamilyRelationshipRequest {
+  id                        String                                 @id @default(uuid()) @db.Uuid
+  requesterPatientProfileId String                                 @db.Uuid
+  targetPatientProfileId    String                                 @db.Uuid
+  relationshipType          PatientFamilyRelationshipType
+  status                    PatientFamilyRelationshipRequestStatus @default(PENDING)
+
+  requestedByUserId String  @db.Uuid
+  respondedByUserId String? @db.Uuid
+
+  reason         String? @db.VarChar(1000)
+  responseReason String? @db.VarChar(1000)
+
+  requestedAt DateTime  @default(now()) @db.Timestamptz(6)
+  respondedAt DateTime? @db.Timestamptz(6)
+  expiresAt   DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+
+  requesterPatientProfile PatientProfile @relation("FamilyRelationshipRequester", fields: [requesterPatientProfileId], references: [id], onDelete: Restrict)
+  targetPatientProfile    PatientProfile @relation("FamilyRelationshipTarget", fields: [targetPatientProfileId], references: [id], onDelete: Restrict)
+
+  requestedByUser User  @relation("FamilyRelationshipRequestCreator", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  respondedByUser User? @relation("FamilyRelationshipRequestResponder", fields: [respondedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([requesterPatientProfileId, status, createdAt])
+  @@index([targetPatientProfileId, status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([respondedByUserId, respondedAt])
+  @@index([expiresAt])
+  @@map("patient_family_relationship_requests")
+}
+
+model PatientTenantRelationshipRequest {
+  id                    String                                 @id @default(uuid()) @db.Uuid
+  patientProfileId      String                                 @db.Uuid
+  patientTenantRecordId String                                 @db.Uuid
+  requestingTenantId    String                                 @db.Uuid
+  requestedByUserId     String                                 @db.Uuid
+  respondedByUserId     String?                                @db.Uuid
+  status                PatientTenantRelationshipRequestStatus @default(PENDING)
+  reason                String?                                @db.VarChar(1000)
+  responseReason        String?                                @db.VarChar(1000)
+  requestedAt           DateTime                               @default(now()) @db.Timestamptz(6)
+  respondedAt           DateTime?                              @db.Timestamptz(6)
+  createdAt             DateTime                               @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                               @updatedAt @db.Timestamptz(6)
+
+  patientProfile      PatientProfile      @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  requestingTenant    Tenant              @relation(fields: [requestingTenantId], references: [id], onDelete: Restrict)
+  requestedByUser     User                @relation("PatientRelationshipRequestor", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  respondedByUser     User?               @relation("PatientRelationshipRequestResponder", fields: [respondedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status, createdAt])
+  @@index([patientTenantRecordId, status])
+  @@index([requestingTenantId, status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([respondedByUserId, respondedAt])
+  @@map("patient_tenant_relationship_requests")
+}
+
+model PatientAccessRequest {
+  id                    String                     @id @default(uuid()) @db.Uuid
+  patientProfileId      String                     @db.Uuid
+  patientTenantRecordId String?                    @db.Uuid
+  requestingTenantId    String                     @db.Uuid
+  requestedByUserId     String                     @db.Uuid
+  reviewedByUserId      String?                    @db.Uuid
+  status                PatientAccessRequestStatus @default(PENDING)
+  purpose               String                     @db.VarChar(500)
+  requestedCategories   Json
+  reason                String?                    @db.VarChar(1000)
+  expiresAt             DateTime?                  @db.Timestamptz(6)
+  respondedAt           DateTime?                  @db.Timestamptz(6)
+  createdAt             DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                   @updatedAt @db.Timestamptz(6)
+
+  patientProfile      PatientProfile       @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord? @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  requestingTenant    Tenant               @relation(fields: [requestingTenantId], references: [id], onDelete: Restrict)
+  requestedByUser     User                 @relation("PatientAccessRequestor", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedByUser      User?                @relation("PatientAccessRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  grants              PatientAccessGrant[]
+
+  @@index([patientProfileId, status])
+  @@index([requestingTenantId, status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([reviewedByUserId, createdAt])
+  @@index([expiresAt])
+  @@map("patient_access_requests")
+}
+
+model PatientAccessGrant {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  patientProfileId      String                   @db.Uuid
+  patientTenantRecordId String?                  @db.Uuid
+  tenantId              String                   @db.Uuid
+  accessRequestId       String?                  @db.Uuid
+  createdByUserId       String                   @db.Uuid
+  status                PatientAccessGrantStatus @default(ACTIVE)
+  categories            Json
+  purpose               String                   @db.VarChar(500)
+  startsAt              DateTime                 @default(now()) @db.Timestamptz(6)
+  expiresAt             DateTime?                @db.Timestamptz(6)
+  revokedAt             DateTime?                @db.Timestamptz(6)
+  revokedReason         String?                  @db.VarChar(500)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(6)
+
+  patientProfile      PatientProfile        @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord?  @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  accessRequest       PatientAccessRequest? @relation(fields: [accessRequestId], references: [id], onDelete: Restrict)
+  createdByUser       User                  @relation("PatientAccessGrantCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status])
+  @@index([tenantId, status, expiresAt])
+  @@index([accessRequestId])
+  @@index([createdByUserId, createdAt])
+  @@map("patient_access_grants")
+}
+
+model PatientDataAccessLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  patientProfileId String   @db.Uuid
+  tenantId         String?  @db.Uuid
+  accessedByUserId String   @db.Uuid
+  action           String   @db.VarChar(100)
+  dataCategory     String   @db.VarChar(100)
+  resourceType     String?  @db.VarChar(100)
+  resourceId       String?  @db.VarChar(100)
+  purpose          String   @db.VarChar(500)
+  outcome          String   @db.VarChar(50)
+  reason           String?  @db.VarChar(500)
+  metadata         Json?
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  tenant         Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  accessedByUser User           @relation(fields: [accessedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, createdAt])
+  @@index([tenantId, patientProfileId, createdAt])
+  @@index([accessedByUserId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("patient_data_access_logs")
+}
+
+model PatientDeletionRequest {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  patientProfileId   String                       @db.Uuid
+  requestingTenantId String?                      @db.Uuid
+  requestedByUserId  String                       @db.Uuid
+  reviewedByUserId   String?                      @db.Uuid
+  requesterType      PatientDeletionRequesterType
+  status             PatientDeletionRequestStatus @default(PENDING)
+  reason             String                       @db.VarChar(1000)
+  reviewReason       String?                      @db.VarChar(1000)
+  requestedAt        DateTime                     @default(now()) @db.Timestamptz(6)
+  reviewedAt         DateTime?                    @db.Timestamptz(6)
+  completedAt        DateTime?                    @db.Timestamptz(6)
+  createdAt          DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                     @updatedAt @db.Timestamptz(6)
+
+  patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id], onDelete: Restrict)
+  requestingTenant Tenant?        @relation(fields: [requestingTenantId], references: [id], onDelete: Restrict)
+  requestedByUser  User           @relation("PatientDeletionRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedByUser   User?          @relation("PatientDeletionReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([patientProfileId, status, createdAt])
+  @@index([requestingTenantId, status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([reviewedByUserId, createdAt])
+  @@map("patient_deletion_requests")
+}
+
+model Registration {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @db.Uuid
+  tenantId           String?            @db.Uuid
+  type               RegistrationType
+  status             RegistrationStatus @default(INITIATED)
+  verificationStatus VerificationStatus @default(PENDING)
+  onboardingStatus   OnboardingStatus   @default(NOT_STARTED)
+
+  completedAt DateTime? @db.Timestamptz(6)
+  expiresAt   DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([tenantId, status])
+  @@index([type, status])
+  @@index([verificationStatus])
+  @@index([onboardingStatus])
+  @@map("registrations")
+}
+
+model RegistrationSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique @db.VarChar(128)
+  expiresAt  DateTime  @db.Timestamptz(6)
+  consumedAt DateTime? @db.Timestamptz(6)
+  lastUsedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("registration_sessions")
+}
+
+enum VerificationChannel {
+  EMAIL
+  PHONE
+}
+
+enum VerificationPurpose {
+  REGISTRATION
+  PASSWORD_RESET
+}
+
+model VerificationChallenge {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String              @db.Uuid
+  channel     VerificationChannel
+  purpose     VerificationPurpose
+  target      String              @db.VarChar(320)
+  codeHash    String              @db.VarChar(128)
+  expiresAt   DateTime            @db.Timestamptz(6)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5)
+  verifiedAt  DateTime?           @db.Timestamptz(6)
+  consumedAt  DateTime?           @db.Timestamptz(6)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, purpose, channel])
+  @@index([target, purpose])
+  @@index([expiresAt])
+  @@map("verification_challenges")
+}

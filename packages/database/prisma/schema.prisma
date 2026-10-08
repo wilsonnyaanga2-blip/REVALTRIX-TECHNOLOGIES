@@ -138,6 +138,11 @@ enum PermissionEffect {
   DENY
 }
 
+enum PermissionScope {
+  TENANT
+  PLATFORM
+}
+
 enum SessionStatus {
   ACTIVE
   REVOKED
@@ -200,6 +205,168 @@ enum TenantDocumentType {
   OTHER
 }
 
+enum PatientJourneyStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  PAUSED
+}
+
+enum PatientJourneyStepStatus {
+  PENDING
+  READY
+  WAITING
+  CALLED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  CANCELLED
+}
+
+enum PatientJourneyStepType {
+  SERVICE
+  WAIT
+  HANDOFF
+  CHECK_IN
+  COMPLETION
+}
+
+enum PatientJourneyHandoffStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+model PatientJourney {
+  id                    String  @id @default(uuid()) @db.Uuid
+  tenantId              String  @db.Uuid
+  patientTenantRecordId String  @db.Uuid
+  encounterId           String? @db.Uuid
+
+  status PatientJourneyStatus @default(ACTIVE)
+
+  startedAt   DateTime  @default(now()) @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  cancelledAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  encounter           Encounter?          @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+
+  steps    PatientJourneyStep[]
+  handoffs PatientJourneyHandoff[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, patientTenantRecordId, status])
+  @@index([tenantId, encounterId])
+  @@map("patient_journeys")
+}
+
+model PatientJourneyHandoff {
+  id          String  @id @default(uuid()) @db.Uuid
+  tenantId    String  @db.Uuid
+  journeyId   String  @db.Uuid
+  encounterId String? @db.Uuid
+
+  fromStepId String? @db.Uuid
+  toStepId   String? @db.Uuid
+
+  fromBranchId     String? @db.Uuid
+  fromDepartmentId String? @db.Uuid
+  toBranchId       String? @db.Uuid
+  toDepartmentId   String? @db.Uuid
+
+  status PatientJourneyHandoffStatus @default(PENDING)
+
+  reason      String? @db.VarChar(1000)
+  instruction String? @db.VarChar(1000)
+
+  initiatedByUserId String @db.Uuid
+
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  acceptedAt  DateTime? @db.Timestamptz(6)
+  rejectedAt  DateTime? @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  cancelledAt DateTime? @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  journey   PatientJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  encounter Encounter?     @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+
+  fromStep PatientJourneyStep? @relation("HandoffFromStep", fields: [fromStepId], references: [id], onDelete: Restrict)
+  toStep   PatientJourneyStep? @relation("HandoffToStep", fields: [toStepId], references: [id], onDelete: Restrict)
+
+  fromBranch Branch? @relation("HandoffFromBranch", fields: [fromBranchId], references: [id], onDelete: Restrict)
+  toBranch   Branch? @relation("HandoffToBranch", fields: [toBranchId], references: [id], onDelete: Restrict)
+
+  fromDepartment Department? @relation("HandoffFromDepartment", fields: [fromDepartmentId], references: [id], onDelete: Restrict)
+  toDepartment   Department? @relation("HandoffToDepartment", fields: [toDepartmentId], references: [id], onDelete: Restrict)
+
+  initiatedByUser User @relation("PatientJourneyHandoffInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, journeyId, status])
+  @@index([tenantId, encounterId])
+  @@index([tenantId, fromDepartmentId, status])
+  @@index([tenantId, toDepartmentId, status])
+  @@index([tenantId, initiatedByUserId])
+  @@map("patient_journey_handoffs")
+}
+
+model PatientJourneyStep {
+  id        String @id @default(uuid()) @db.Uuid
+  journeyId String @db.Uuid
+  tenantId  String @db.Uuid
+
+  sequence Int
+  type     PatientJourneyStepType
+  status   PatientJourneyStepStatus @default(PENDING)
+
+  name        String  @db.VarChar(200)
+  description String? @db.VarChar(1000)
+
+  branchId     String? @db.Uuid
+  departmentId String? @db.Uuid
+  encounterId  String? @db.Uuid
+  queueId      String? @db.Uuid
+  queueEntryId String? @db.Uuid
+
+  location    String? @db.VarChar(300)
+  instruction String? @db.VarChar(1000)
+
+  estimatedWaitMinutes     Int?
+  estimatedDurationMinutes Int?
+
+  readyAt     DateTime? @db.Timestamptz(6)
+  startedAt   DateTime? @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  journey      PatientJourney          @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  handoffsFrom PatientJourneyHandoff[] @relation("HandoffFromStep")
+  handoffsTo   PatientJourneyHandoff[] @relation("HandoffToStep")
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch       Branch?                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  department   Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  encounter    Encounter?              @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  queue        Queue?                  @relation(fields: [queueId], references: [id], onDelete: Restrict)
+  queueEntry   QueueEntry?             @relation(fields: [queueEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([journeyId, sequence])
+  @@index([tenantId, status])
+  @@index([tenantId, journeyId, sequence])
+  @@index([tenantId, departmentId, status])
+  @@index([tenantId, queueEntryId])
+  @@map("patient_journey_steps")
+}
+
 model User {
   id          String       @id @default(uuid()) @db.Uuid
   username    String?      @unique @db.VarChar(100)
@@ -212,6 +379,7 @@ model User {
 
   identities                         Identity[]
   memberships                        Membership[]
+  platformRoleAssignments            PlatformRoleAssignment[]
   sessions                           Session[]
   devices                            Device[]
   apiKeys                            ApiKey[]
@@ -236,8 +404,20 @@ model User {
   familyRelationshipRequestsHandled  PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestResponder")
   familyRelationshipsCreated         PatientFamilyRelationship[]        @relation("FamilyRelationshipCreator")
   familyRelationshipsRevoked         PatientFamilyRelationship[]        @relation("FamilyRelationshipRevoker")
-  patientDeletionRequestsMade        PatientDeletionRequest[]           @relation("PatientDeletionRequester")
-  patientDeletionRequestsReviewed    PatientDeletionRequest[]           @relation("PatientDeletionReviewer")
+  patientJourneyHandoffsInitiated    PatientJourneyHandoff[]            @relation("PatientJourneyHandoffInitiator")
+
+  guardianAuthoritiesCreated            PatientGuardianAuthority[]            @relation("GuardianAuthorityCreator")
+  guardianAuthoritiesVerified           PatientGuardianAuthority[]            @relation("GuardianAuthorityVerifier")
+  guardianAuthoritiesRevoked            PatientGuardianAuthority[]            @relation("GuardianAuthorityRevoker")
+  guardianVerificationDocumentsUploaded PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentUploader")
+  guardianVerificationDocumentsReviewed PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentReviewer")
+  dependentRegistrationsCreated         PatientDependentRegistration[]        @relation("DependentRegistrationCreator")
+
+  clinicalNotesAuthored       ClinicalNote[]        @relation("ClinicalNoteAuthor")
+  clinicalNoteVersionsCreated ClinicalNoteVersion[] @relation("ClinicalNoteVersionCreator")
+
+  patientDeletionRequestsMade     PatientDeletionRequest[] @relation("PatientDeletionRequester")
+  patientDeletionRequestsReviewed PatientDeletionRequest[] @relation("PatientDeletionReviewer")
 
   patientContactRecordsCreated    PatientContact[]          @relation("PatientContactCreator")
   patientContactRecordsUpdated    PatientContact[]          @relation("PatientContactUpdater")
@@ -251,6 +431,13 @@ model User {
   patientInsurancesUpdated        PatientInsurance[]        @relation("PatientInsuranceUpdater")
   patientCorporateProfilesCreated PatientCorporateProfile[] @relation("PatientCorporateProfileCreator")
   patientCorporateProfilesUpdated PatientCorporateProfile[] @relation("PatientCorporateProfileUpdater")
+  createdQueueEntries             QueueEntry[]              @relation("QueueEntryCreator")
+  queueEntryHistoryChanges        QueueEntryHistory[]       @relation("QueueEntryHistoryChanger")
+  queueCallsMade                  QueueCall[]               @relation("QueueCallCaller")
+  queueCareRecordsAuthored        QueueCareRecord[]         @relation("QueueCareRecordAuthor")
+  queueCareAttachmentsUploaded    QueueCareAttachment[]     @relation("QueueCareAttachmentUploader")
+
+  notifications Notification[]
 
   @@index([status])
   @@index([createdAt])
@@ -296,9 +483,10 @@ model ProviderProfile {
   updatedAt          DateTime     @updatedAt @db.Timestamptz(6)
   deletedAt          DateTime?    @db.Timestamptz(6)
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  encounters Encounter[]
+  tenant                Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  encounters            Encounter[]
+  clinicalNotesAuthored ClinicalNote[] @relation("ClinicalNoteProviderAuthor")
 
   @@unique([tenantId, userId])
   @@unique([tenantId, providerNumber])
@@ -307,6 +495,232 @@ model ProviderProfile {
   @@index([userId, status])
   @@index([tenantId, specialty])
   @@map("provider_profiles")
+}
+
+enum ClinicalNoteType {
+  CONSULTATION
+  PROGRESS
+  EMERGENCY
+  ADMISSION
+  DISCHARGE
+  PROCEDURE
+  FOLLOW_UP
+  TELEMEDICINE
+}
+
+enum ClinicalNoteStatus {
+  DRAFT
+  SIGNED
+  FINAL
+  AMENDED
+  VOID
+}
+
+enum QueueStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum QueueEntryStatus {
+  CREATED
+  WAITING
+  CALLED
+  IN_SERVICE
+  COMPLETED
+  SKIPPED
+  CANCELLED
+  NO_SHOW
+}
+
+enum QueueEntryPriority {
+  ROUTINE
+  URGENT
+  PRIORITY
+  EMERGENCY
+}
+
+model Queue {
+  id           String  @id @default(uuid()) @db.Uuid
+  tenantId     String  @db.Uuid
+  branchId     String? @db.Uuid
+  departmentId String? @db.Uuid
+
+  name        String  @db.VarChar(200)
+  code        String  @db.VarChar(50)
+  description String? @db.VarChar(1000)
+
+  status QueueStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch     Branch?     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  entries QueueEntry[]
+
+  patientJourneySteps PatientJourneyStep[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@index([tenantId, branchId, status])
+  @@index([tenantId, departmentId, status])
+  @@map("queues")
+}
+
+model QueueEntry {
+  id                    String @id @default(uuid()) @db.Uuid
+  tenantId              String @db.Uuid
+  queueId               String @db.Uuid
+  encounterId           String @db.Uuid
+  patientTenantRecordId String @db.Uuid
+
+  queueNumber String             @db.VarChar(100)
+  priority    QueueEntryPriority @default(ROUTINE)
+  status      QueueEntryStatus   @default(CREATED)
+
+  position Int?
+  reason   String? @db.VarChar(1000)
+
+  checkedInAt DateTime? @db.Timestamptz(6)
+  calledAt    DateTime? @db.Timestamptz(6)
+  startedAt   DateTime? @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  skippedAt   DateTime? @db.Timestamptz(6)
+  cancelledAt DateTime? @db.Timestamptz(6)
+  noShowAt    DateTime? @db.Timestamptz(6)
+
+  createdByUserId String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  queue               Queue               @relation(fields: [queueId], references: [id], onDelete: Restrict)
+  encounter           Encounter           @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  createdByUser       User                @relation("QueueEntryCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  history     QueueEntryHistory[]
+  calls       QueueCall[]
+  careRecords QueueCareRecord[]
+
+  journeySteps PatientJourneyStep[]
+
+  @@unique([tenantId, queueId, queueNumber])
+  @@index([tenantId, queueId, status])
+  @@index([tenantId, queueId, priority, status])
+  @@index([tenantId, encounterId])
+  @@index([tenantId, patientTenantRecordId, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@map("queue_entries")
+}
+
+model QueueCareRecord {
+  id           String  @id @default(uuid()) @db.Uuid
+  tenantId     String  @db.Uuid
+  queueEntryId String  @db.Uuid
+  encounterId  String  @db.Uuid
+  departmentId String? @db.Uuid
+  authorUserId String  @db.Uuid
+
+  note        String? @db.Text
+  procedures  String? @db.Text
+  documentUrl String? @db.VarChar(2048)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  queueEntry  QueueEntry            @relation(fields: [queueEntryId], references: [id], onDelete: Restrict)
+  encounter   Encounter             @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  department  Department?           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  author      User                  @relation("QueueCareRecordAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  attachments QueueCareAttachment[]
+
+  @@index([tenantId, queueEntryId, createdAt])
+  @@index([tenantId, encounterId, createdAt])
+  @@map("queue_care_records")
+}
+
+model QueueCareAttachment {
+  id               String @id @default(uuid()) @db.Uuid
+  tenantId         String @db.Uuid
+  careRecordId     String @db.Uuid
+  uploadedByUserId String @db.Uuid
+  storageKey       String @unique @db.VarChar(500)
+  fileName         String @db.VarChar(255)
+  contentType      String @db.VarChar(100)
+  byteSize         Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  careRecord QueueCareRecord @relation(fields: [careRecordId], references: [id], onDelete: Restrict)
+  uploadedBy User            @relation("QueueCareAttachmentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, careRecordId, createdAt])
+  @@map("queue_care_attachments")
+}
+
+enum QueueCallStatus {
+  CALLED
+  ACKNOWLEDGED
+  EXPIRED
+  CANCELLED
+}
+
+model QueueCall {
+  id             String @id @default(uuid()) @db.Uuid
+  tenantId       String @db.Uuid
+  queueEntryId   String @db.Uuid
+  calledByUserId String @db.Uuid
+
+  callNumber Int
+  status     QueueCallStatus @default(CALLED)
+
+  calledAt       DateTime  @default(now()) @db.Timestamptz(6)
+  acknowledgedAt DateTime? @db.Timestamptz(6)
+  expiresAt      DateTime? @db.Timestamptz(6)
+  cancelledAt    DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  queueEntry   QueueEntry @relation(fields: [queueEntryId], references: [id], onDelete: Restrict)
+  calledByUser User       @relation("QueueCallCaller", fields: [calledByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([queueEntryId, callNumber])
+  @@index([tenantId, queueEntryId, createdAt])
+  @@index([tenantId, status, calledAt])
+  @@index([calledByUserId, createdAt])
+  @@map("queue_calls")
+}
+
+model QueueEntryHistory {
+  id           String @id @default(uuid()) @db.Uuid
+  tenantId     String @db.Uuid
+  queueEntryId String @db.Uuid
+
+  fromStatus   QueueEntryStatus?
+  toStatus     QueueEntryStatus
+  fromPosition Int?
+  toPosition   Int?
+  reason       String?           @db.VarChar(1000)
+
+  changedByUserId String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  queueEntry    QueueEntry @relation(fields: [queueEntryId], references: [id], onDelete: Restrict)
+  changedByUser User       @relation("QueueEntryHistoryChanger", fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, queueEntryId, createdAt])
+  @@index([tenantId, toStatus, createdAt])
+  @@index([changedByUserId, createdAt])
+  @@map("queue_entry_history")
 }
 
 model Encounter {
@@ -338,6 +752,13 @@ model Encounter {
   department          Department?              @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   createdByUser       User                     @relation("EncounterCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   statusHistory       EncounterStatusHistory[]
+  clinicalNotes       ClinicalNote[]
+  queueEntries        QueueEntry[]
+
+  patientJourneys        PatientJourney[]
+  journeySteps           PatientJourneyStep[]
+  patientJourneyHandoffs PatientJourneyHandoff[]
+  queueCareRecords       QueueCareRecord[]
 
   @@unique([tenantId, encounterNumber])
   @@index([tenantId, status])
@@ -347,6 +768,79 @@ model Encounter {
   @@index([tenantId, departmentId, status])
   @@index([createdByUserId])
   @@map("encounters")
+}
+
+model ClinicalNote {
+  id                    String  @id @default(uuid()) @db.Uuid
+  tenantId              String  @db.Uuid
+  patientTenantRecordId String  @db.Uuid
+  encounterId           String  @db.Uuid
+  authorUserId          String  @db.Uuid
+  authorProviderId      String? @db.Uuid
+
+  noteNumber String             @db.VarChar(100)
+  type       ClinicalNoteType
+  status     ClinicalNoteStatus @default(DRAFT)
+
+  chiefComplaint String? @db.VarChar(2000)
+  subjective     String? @db.Text
+  objective      String? @db.Text
+  assessment     String? @db.Text
+  plan           String? @db.Text
+
+  signedAt    DateTime? @db.Timestamptz(6)
+  finalizedAt DateTime? @db.Timestamptz(6)
+  voidedAt    DateTime? @db.Timestamptz(6)
+  voidReason  String?   @db.VarChar(1000)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  patientTenantRecord PatientTenantRecord @relation(fields: [patientTenantRecordId], references: [id], onDelete: Restrict)
+  encounter           Encounter           @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  authorUser          User                @relation("ClinicalNoteAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  authorProvider      ProviderProfile?    @relation("ClinicalNoteProviderAuthor", fields: [authorProviderId], references: [id], onDelete: Restrict)
+
+  versions ClinicalNoteVersion[]
+
+  @@unique([tenantId, noteNumber])
+  @@index([tenantId, patientTenantRecordId, createdAt])
+  @@index([tenantId, encounterId, createdAt])
+  @@index([tenantId, authorUserId, createdAt])
+  @@index([tenantId, authorProviderId, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@map("clinical_notes")
+}
+
+model ClinicalNoteVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  clinicalNoteId String @db.Uuid
+  tenantId       String @db.Uuid
+  versionNumber  Int
+
+  chiefComplaint String? @db.VarChar(2000)
+  subjective     String? @db.Text
+  objective      String? @db.Text
+  assessment     String? @db.Text
+  plan           String? @db.Text
+
+  createdByUserId String  @db.Uuid
+  amendmentReason String? @db.VarChar(2000)
+
+  signedAt    DateTime? @db.Timestamptz(6)
+  finalizedAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  clinicalNote ClinicalNote @relation(fields: [clinicalNoteId], references: [id], onDelete: Restrict)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("ClinicalNoteVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([clinicalNoteId, versionNumber])
+  @@index([tenantId, clinicalNoteId, createdAt])
+  @@index([tenantId, createdByUserId, createdAt])
+  @@map("clinical_note_versions")
 }
 
 model EncounterStatusHistory {
@@ -399,11 +893,24 @@ model Tenant {
   patientDataSubmissions      PatientDataSubmission[]
   encounters                  Encounter[]
   encounterStatusHistory      EncounterStatusHistory[]
+  clinicalNotes               ClinicalNote[]
+  clinicalNoteVersions        ClinicalNoteVersion[]
   patientAccessRequests       PatientAccessRequest[]
   patientAccessGrants         PatientAccessGrant[]
   patientAccessLogs           PatientDataAccessLog[]
   patientDeletionRequests     PatientDeletionRequest[]
   patientRelationshipRequests PatientTenantRelationshipRequest[]
+  Queue                       Queue[]
+  QueueEntry                  QueueEntry[]
+  QueueEntryHistory           QueueEntryHistory[]
+  QueueCall                   QueueCall[]
+  Notification                Notification[]
+
+  patientJourneys        PatientJourney[]
+  patientJourneySteps    PatientJourneyStep[]
+  patientJourneyHandoffs PatientJourneyHandoff[]
+  queueCareRecords       QueueCareRecord[]
+  queueCareAttachments   QueueCareAttachment[]
 
   @@index([type])
   @@index([status])
@@ -557,13 +1064,18 @@ model Branch {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization?           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   departments  Department[]
   memberships  Membership[]
   auditEvents  AuditEvent[]
   services     Service[]
   encounters   Encounter[]
+  queues       Queue[]
+  handoffsFrom PatientJourneyHandoff[] @relation("HandoffFromBranch")
+  handoffsTo   PatientJourneyHandoff[] @relation("HandoffToBranch")
+
+  patientJourneySteps PatientJourneyStep[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -594,6 +1106,12 @@ model Department {
   memberships  Membership[]
   services     Service[]
   encounters   Encounter[]
+  queues       Queue[]
+
+  patientJourneySteps PatientJourneyStep[]
+  handoffsFrom        PatientJourneyHandoff[] @relation("HandoffFromDepartment")
+  handoffsTo          PatientJourneyHandoff[] @relation("HandoffToDepartment")
+  queueCareRecords    QueueCareRecord[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -643,14 +1161,28 @@ model Role {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  tenant      Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  permissions RolePermission[]
-  memberships MembershipRole[]
+  tenant              Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  permissions         RolePermission[]
+  memberships         MembershipRole[]
+  platformAssignments PlatformRoleAssignment[]
 
   @@unique([tenantId, code])
   @@index([tenantId, scope])
   @@index([status])
   @@map("roles")
+}
+
+model PlatformRoleAssignment {
+  userId     String   @db.Uuid
+  roleId     String   @db.Uuid
+  assignedAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("platform_role_assignments")
 }
 
 model MembershipRole {
@@ -669,6 +1201,7 @@ model MembershipRole {
 model Permission {
   id          String           @id @default(uuid()) @db.Uuid
   tenantId    String?          @db.Uuid
+  scope       PermissionScope  @default(TENANT)
   resource    String           @db.VarChar(150)
   action      String           @db.VarChar(100)
   effect      PermissionEffect @default(ALLOW)
@@ -842,13 +1375,54 @@ enum PatientFamilyRelationshipRequestStatus {
   EXPIRED
 }
 
+enum PatientGuardianAuthorityType {
+  PARENT
+  LEGAL_GUARDIAN
+  CAREGIVER
+  AUTHORIZED_REPRESENTATIVE
+}
+
+enum PatientGuardianAuthorityStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  EXPIRED
+}
+
+enum PatientGuardianVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum PatientDependentRegistrationStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum PatientGuardianVerificationDocumentType {
+  BIRTH_CERTIFICATE
+  BIRTH_NOTIFICATION
+}
+
+enum PatientGuardianVerificationDocumentStatus {
+  UPLOADED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  REPLACED
+}
+
 model PatientProfile {
-  id                String  @id @default(uuid()) @db.Uuid
-  userId            String  @unique @db.Uuid
-  platformPatientId String  @unique @default(cuid()) @db.VarChar(50)
-  firstName         String  @db.VarChar(100)
-  secondName        String  @db.VarChar(100)
-  location          String? @db.VarChar(300)
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique @db.Uuid
+  platformPatientId String    @unique @default(cuid()) @db.VarChar(50)
+  firstName         String    @db.VarChar(100)
+  secondName        String    @db.VarChar(100)
+  dateOfBirth       DateTime? @db.Date
+  location          String?   @db.VarChar(300)
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
@@ -865,16 +1439,124 @@ model PatientProfile {
   familyRelationshipsReceived        PatientFamilyRelationship[]        @relation("FamilyRelationshipRelated")
   familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequester")
   familyRelationshipRequestsReceived PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipTarget")
-  contact                            PatientContact?
-  emergencyContacts                  EmergencyContact[]
-  nextOfKin                          NextOfKin[]
-  addresses                          PatientAddress[]
-  insurances                         PatientInsurance[]
-  corporateProfile                   PatientCorporateProfile?
+
+  guardianAuthoritiesGranted               PatientGuardianAuthority[]            @relation("GuardianAuthorityGuardian")
+  guardianAuthoritiesReceived              PatientGuardianAuthority[]            @relation("GuardianAuthorityDependent")
+  guardianVerificationDocumentsAsGuardian  PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentGuardian")
+  guardianVerificationDocumentsAsDependent PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentDependent")
+
+  dependentRegistration         PatientDependentRegistration?  @relation("DependentRegistrationDependent")
+  dependentRegistrationsCreated PatientDependentRegistration[] @relation("DependentRegistrationRegistrar")
+
+  contact           PatientContact?
+  emergencyContacts EmergencyContact[]
+  nextOfKin         NextOfKin[]
+  addresses         PatientAddress[]
+  insurances        PatientInsurance[]
+  corporateProfile  PatientCorporateProfile?
 
   @@index([firstName, secondName])
   @@index([location])
   @@map("patient_profiles")
+}
+
+model PatientGuardianAuthority {
+  id                        String                            @id @default(uuid()) @db.Uuid
+  guardianPatientProfileId  String                            @db.Uuid
+  dependentPatientProfileId String                            @db.Uuid
+  authorityType             PatientGuardianAuthorityType
+  status                    PatientGuardianAuthorityStatus    @default(ACTIVE)
+  verificationStatus        PatientGuardianVerificationStatus @default(PENDING)
+
+  createdByUserId  String  @db.Uuid
+  verifiedByUserId String? @db.Uuid
+  revokedByUserId  String? @db.Uuid
+
+  startsAt   DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt  DateTime? @db.Timestamptz(6)
+  verifiedAt DateTime? @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+
+  reason             String? @db.VarChar(1000)
+  verificationReason String? @db.VarChar(1000)
+  revokedReason      String? @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  guardianPatientProfile  PatientProfile @relation("GuardianAuthorityGuardian", fields: [guardianPatientProfileId], references: [id], onDelete: Restrict)
+  dependentPatientProfile PatientProfile @relation("GuardianAuthorityDependent", fields: [dependentPatientProfileId], references: [id], onDelete: Restrict)
+
+  createdByUser         User                                  @relation("GuardianAuthorityCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  verifiedByUser        User?                                 @relation("GuardianAuthorityVerifier", fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  revokedByUser         User?                                 @relation("GuardianAuthorityRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+  verificationDocuments PatientGuardianVerificationDocument[]
+
+  @@index([guardianPatientProfileId, status])
+  @@index([dependentPatientProfileId, status])
+  @@index([verificationStatus])
+  @@index([expiresAt])
+  @@index([createdByUserId, createdAt])
+  @@map("patient_guardian_authorities")
+}
+
+model PatientGuardianVerificationDocument {
+  id                        String @id @default(uuid()) @db.Uuid
+  guardianAuthorityId       String @db.Uuid
+  guardianPatientProfileId  String @db.Uuid
+  dependentPatientProfileId String @db.Uuid
+
+  type   PatientGuardianVerificationDocumentType
+  status PatientGuardianVerificationDocumentStatus @default(UPLOADED)
+
+  storageKey    String? @db.VarChar(1000)
+  fileName      String  @db.VarChar(255)
+  mimeType      String  @db.VarChar(150)
+  fileSizeBytes BigInt
+  checksum      String  @db.VarChar(128)
+
+  uploadedByUserId String  @db.Uuid
+  reviewedByUserId String? @db.Uuid
+
+  reviewedAt      DateTime? @db.Timestamptz(6)
+  rejectionReason String?   @db.VarChar(1000)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  guardianAuthority       PatientGuardianAuthority @relation(fields: [guardianAuthorityId], references: [id], onDelete: Restrict)
+  guardianPatientProfile  PatientProfile           @relation("GuardianVerificationDocumentGuardian", fields: [guardianPatientProfileId], references: [id], onDelete: Restrict)
+  dependentPatientProfile PatientProfile           @relation("GuardianVerificationDocumentDependent", fields: [dependentPatientProfileId], references: [id], onDelete: Restrict)
+
+  uploadedByUser User  @relation("GuardianVerificationDocumentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  reviewedByUser User? @relation("GuardianVerificationDocumentReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([guardianAuthorityId, status])
+  @@index([guardianPatientProfileId, status])
+  @@index([dependentPatientProfileId, status])
+  @@index([status, createdAt])
+  @@index([uploadedByUserId, createdAt])
+  @@map("patient_guardian_verification_documents")
+}
+
+model PatientDependentRegistration {
+  id                           String                             @id @default(uuid()) @db.Uuid
+  dependentPatientProfileId    String                             @unique @db.Uuid
+  registeredByPatientProfileId String                             @db.Uuid
+  registeredByUserId           String                             @db.Uuid
+  relationshipType             PatientFamilyRelationshipType
+  status                       PatientDependentRegistrationStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  dependentPatientProfile    PatientProfile @relation("DependentRegistrationDependent", fields: [dependentPatientProfileId], references: [id], onDelete: Restrict)
+  registeredByPatientProfile PatientProfile @relation("DependentRegistrationRegistrar", fields: [registeredByPatientProfileId], references: [id], onDelete: Restrict)
+  registeredByUser           User           @relation("DependentRegistrationCreator", fields: [registeredByUserId], references: [id], onDelete: Restrict)
+
+  @@index([registeredByPatientProfileId, status])
+  @@index([registeredByUserId, createdAt])
+  @@map("patient_dependent_registrations")
 }
 
 model PatientContact {
@@ -1077,9 +1759,13 @@ model PatientTenantRecord {
   createdByUser         User?                              @relation("PatientRecordCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   PatientDataSubmission PatientDataSubmission[]
   encounters            Encounter[]
+  queueEntries          QueueEntry[]
+  clinicalNotes         ClinicalNote[]
   accessRequests        PatientAccessRequest[]
   accessGrants          PatientAccessGrant[]
   relationshipRequests  PatientTenantRelationshipRequest[]
+
+  patientJourneys PatientJourney[]
 
   @@unique([tenantId, patientProfileId])
   @@unique([tenantId, patientNumber])
@@ -1422,4 +2108,71 @@ model VerificationChallenge {
   @@index([target, purpose])
   @@index([expiresAt])
   @@map("verification_challenges")
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model Notification {
+  id              String  @id @default(uuid()) @db.Uuid
+  tenantId        String? @db.Uuid
+  recipientUserId String  @db.Uuid
+
+  type  String @db.VarChar(150)
+  title String @db.VarChar(300)
+  body  String @db.VarChar(5000)
+  data  Json?
+
+  readAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  tenant        Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  recipientUser User                   @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+  deliveries    NotificationDelivery[]
+
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([type, createdAt])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String @id @default(uuid()) @db.Uuid
+  notificationId String @db.Uuid
+
+  channel NotificationChannel
+  status  NotificationDeliveryStatus @default(PENDING)
+
+  idempotencyKey String @unique @db.VarChar(300)
+  attempts       Int    @default(0)
+
+  availableAt   DateTime  @default(now()) @db.Timestamptz(6)
+  processingAt  DateTime? @db.Timestamptz(6)
+  sentAt        DateTime? @db.Timestamptz(6)
+  failedAt      DateTime? @db.Timestamptz(6)
+  failureReason String?   @db.VarChar(2000)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([notificationId, channel])
+  @@index([channel, status, availableAt])
+  @@map("notification_deliveries")
 }

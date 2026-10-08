@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthenticationModule } from '../core/authentication/authentication.module.js';
 import { AuthorizationModule } from '../authorization/authorization.module.js';
+import { QueuesModule } from '../queues/queues.module.js';
 import { EncountersController } from './encounters.controller.js';
 import { EncountersService } from './encounters.service.js';
 
@@ -8,6 +9,7 @@ import { EncountersService } from './encounters.service.js';
   imports: [
     AuthenticationModule,
     AuthorizationModule,
+    QueuesModule,
   ],
   controllers: [EncountersController],
   providers: [EncountersService],

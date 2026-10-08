@@ -22,6 +22,11 @@ import { PatientDataModule } from './modules/patient-data/patient-data.module.js
 import { PatientFamilyModule } from './modules/patient-family/patient-family.module.js';
 import { ProvidersModule } from './modules/providers/providers.module.js';
 import { EncountersModule } from './modules/encounters/encounters.module.js';
+import { StorageModule } from './modules/storage/storage.module.js';
+import { ClinicalNotesModule } from './modules/clinical-notes/clinical-notes.module.js';
+import { QueuesModule } from './modules/queues/queues.module.js';
+import { PatientJourneysModule } from './modules/patient-journeys/patient-journeys.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -36,6 +41,7 @@ import { EncountersModule } from './modules/encounters/encounters.module.js';
       },
     ]),
     DatabaseModule,
+    StorageModule,
     CoreModule,
     HealthModule,
     RegistrationModule,
@@ -51,6 +57,10 @@ import { EncountersModule } from './modules/encounters/encounters.module.js';
     PatientFamilyModule,
     ProvidersModule,
     EncountersModule,
+    ClinicalNotesModule,
+    QueuesModule,
+    PatientJourneysModule,
+    NotificationsModule,
     DashboardModule,
     BranchesModule,
     DepartmentsModule,

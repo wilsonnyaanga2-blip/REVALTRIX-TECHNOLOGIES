@@ -58,3 +58,63 @@ export interface PatientDashboardResponse {
   facilities: PatientDashboardFacility[];
   pendingRelationshipRequests: PatientRelationshipRequest[];
 }
+
+export interface PatientJourneyStep {
+  id: string;
+  sequence: number;
+  type: string;
+  status: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  instruction: string | null;
+  estimatedWaitMinutes: number | null;
+  estimatedDurationMinutes: number | null;
+  readyAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  branch: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  department: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  queue: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  queueEntry: {
+    id: string;
+    queueNumber: string;
+    priority: string;
+    status: string;
+    position: number | null;
+    checkedInAt: string | null;
+    calledAt: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    reason?: string | null;
+  } | null;
+}
+
+export interface PatientJourney {
+  journey: {
+    id: string;
+    status: string;
+    startedAt: string;
+    encounterId: string | null;
+  };
+  current: PatientJourneyStep | null;
+  next: PatientJourneyStep | null;
+  future: PatientJourneyStep[];
+  steps: PatientJourneyStep[];
+}
+
+export interface PatientJourneyResponse {
+  data: PatientJourney[];
+}

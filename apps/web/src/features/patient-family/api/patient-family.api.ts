@@ -1,5 +1,7 @@
 import { authenticatedApiRequest } from '../../../lib/auth-api.js';
 import type {
+  CreateDependentRegistrationRequest,
+  DependentRegistrationResponse,
   CreateFamilyRelationshipRequest,
   FamilyRequestResponse,
   FamilyRequestsResponse,
@@ -18,6 +20,19 @@ export async function getFamilyRelationships(): Promise<FamilyRelationshipsRespo
 export async function getFamilyRequests(): Promise<FamilyRequestsResponse> {
   return authenticatedApiRequest<FamilyRequestsResponse>(
     '/v1/patient-family/requests',
+  );
+}
+
+
+export async function registerDependent(
+  payload: CreateDependentRegistrationRequest,
+): Promise<DependentRegistrationResponse> {
+  return authenticatedApiRequest<DependentRegistrationResponse>(
+    '/v1/patient-family/dependents',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
   );
 }
 
