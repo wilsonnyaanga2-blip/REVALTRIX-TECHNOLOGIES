@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -27,10 +29,17 @@ import { ClinicalNotesModule } from './modules/clinical-notes/clinical-notes.mod
 import { QueuesModule } from './modules/queues/queues.module.js';
 import { PatientJourneysModule } from './modules/patient-journeys/patient-journeys.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
+const envFilePath = [
+  resolve(process.cwd(), 'apps/.env'),
+  resolve(process.cwd(), '.env'),
+  resolve(process.cwd(), '../.env'),
+].find((filePath) => existsSync(filePath));
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: envFilePath ? [envFilePath] : [],
       load: [configuration, authenticationConfiguration],
     }),
     ThrottlerModule.forRoot([

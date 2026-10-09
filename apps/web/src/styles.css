@@ -4501,8 +4501,63 @@ button {
 }
 
 @media (min-width: 801px) {
+  .patient-app-shell {
+    grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
+    transition: grid-template-columns 180ms ease;
+  }
+
   .patient-app-shell.patient-sidebar-collapsed {
     grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .patient-sidebar {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .patient-sidebar-brand-copy {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .patient-sidebar-toggle {
+    margin-left: auto;
+  }
+
+  .patient-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .patient-nav-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .patient-topbar {
+    flex-wrap: wrap;
+  }
+
+  .patient-topbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .patient-dashboard-notification-controls {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .patient-app-content {
+    margin: 0;
+    padding: 32px;
+    text-align: left;
+  }
+
+  .patient-app-content > *,
+  .patient-patient-content-panel {
+    min-width: 0;
   }
 
   .patient-sidebar-toggle {
@@ -4611,5 +4666,75 @@ button {
   .patient-topbar-actions {
     display: grid;
     gap: 12px;
+  }
+}
+
+.patient-app-shell {
+  display: grid !important;
+  grid-template-columns: 250px minmax(0, 1fr) !important;
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.patient-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  width: 250px;
+  min-width: 250px;
+  box-sizing: border-box;
+  z-index: 40;
+}
+
+.patient-app-main, .patient-app-content {
+  min-width: 0 !important;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* === Corrected Patient Dashboard App Shell Grid === */
+.patient-app-shell {
+  display: grid !important;
+  grid-template-columns: 250px minmax(0, 1fr) !important;
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.patient-sidebar {
+  grid-column: 1 / 2;
+  position: sticky !important;
+  top: 0;
+  height: 100vh;
+  width: 250px;
+  min-width: 250px;
+  z-index: 30;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+}
+
+.patient-app-main, 
+.patient-app-content, 
+.patient-patient-content-panel {
+  grid-column: 2 / 3;
+  min-width: 0 !important;
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Responsive fallback for smaller screens */
+@media (max-width: 800px) {
+  .patient-app-shell {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .patient-sidebar {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
   }
 }
