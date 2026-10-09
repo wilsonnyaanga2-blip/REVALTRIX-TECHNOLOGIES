@@ -1,0 +1,995 @@
+
+/* =========================================================
+   Patient Care History — clinical, compact, easy to scan
+   ========================================================= */
+
+.patient-care-history-dropdown {
+  margin-top: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.patient-care-history-dropdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  cursor: pointer;
+  list-style: none;
+  background: #f8fafc;
+  transition: background 0.2s ease;
+}
+
+.patient-care-history-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.patient-care-history-dropdown > summary::before {
+  content: "▶";
+  font-size: 11px;
+  color: #64748b;
+  transition: transform 0.2s ease;
+}
+
+.patient-care-history-dropdown[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.patient-care-history-dropdown > summary:hover {
+  background: #f1f5f9;
+}
+
+.patient-care-history-dropdown > summary > span:first-of-type {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.patient-care-history-dropdown > summary strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.patient-care-history-dropdown > summary small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.patient-care-history-dropdown > summary > span:last-child {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.patient-care-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.patient-care-history-record {
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.patient-care-history-record > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.patient-care-history-record > summary::-webkit-details-marker {
+  display: none;
+}
+
+.patient-care-history-record > summary::before {
+  content: "▶";
+  position: absolute;
+  margin-left: -11px;
+  font-size: 9px;
+  color: #94a3b8;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+}
+
+.patient-care-history-record {
+  position: relative;
+}
+
+.patient-care-history-record[open] > summary::before {
+  transform: translateX(-100%) rotate(90deg);
+}
+
+.patient-care-history-record > summary > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.patient-care-history-record > summary strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.patient-care-history-record > summary small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.patient-care-history-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.patient-care-history-details {
+  padding: 0 16px 16px;
+  border-top: 1px solid #edf1f5;
+}
+
+.patient-history-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.patient-history-overview > div {
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.patient-history-overview span,
+.patient-history-clinical-note span,
+.patient-history-step-content > div > span,
+.patient-history-care-record span {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.patient-history-overview strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.patient-history-clinical-section,
+.patient-history-departments,
+.patient-history-referrals {
+  margin-top: 12px;
+}
+
+.patient-history-clinical-section h4,
+.patient-history-departments h4,
+.patient-history-referrals h4 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.patient-history-clinical-note {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #dbeafe;
+  border-left: 4px solid #3b82f6;
+  border-radius: 10px;
+  background: #eff6ff;
+}
+
+.patient-history-clinical-note + .patient-history-clinical-note {
+  margin-top: 8px;
+}
+
+.patient-history-clinical-note p,
+.patient-history-step-content p,
+.patient-history-referrals p {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.patient-history-step {
+  margin-top: 8px;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.patient-history-step > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.patient-history-step > summary::-webkit-details-marker {
+  display: none;
+}
+
+.patient-history-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.patient-history-step-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.patient-history-step-header strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.patient-history-step-header span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.patient-history-step-header b {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.patient-history-step-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+  border-top: 1px solid #edf1f5;
+}
+
+.patient-history-care-records h5,
+.patient-history-referrals h5 {
+  margin: 12px 0 8px;
+  color: #334155;
+  font-size: 12px;
+}
+
+.patient-history-care-record {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.patient-history-care-record + .patient-history-care-record {
+  margin-top: 8px;
+}
+
+.patient-history-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.patient-history-attachment {
+  display: inline-flex !important;
+  margin: 0 !important;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #e0e7ff;
+  color: #3730a3 !important;
+  font-size: 11px !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.patient-history-referrals article {
+  padding: 11px 12px;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+}
+
+.patient-history-referrals article + article {
+  margin-top: 8px;
+}
+
+.patient-history-referrals article strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #92400e;
+  font-size: 12px;
+}
+
+.patient-history-referrals article span {
+  display: inline;
+  margin: 0;
+  color: #92400e;
+  font-size: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.patient-history-empty {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Active visit = blue, completed = green */
+.patient-care-history-record:has(.patient-care-history-status) {
+  border-left: 3px solid #22c55e;
+}
+
+/* Make active/in-progress records visually distinct */
+.patient-care-history-record:has(.patient-care-history-status) .patient-care-history-status {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .patient-care-history-dropdown > summary,
+  .patient-care-history-record > summary {
+    padding: 13px;
+  }
+
+  .patient-history-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-history-step-header {
+    align-items: flex-start;
+  }
+
+  .patient-care-history-record > summary {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+
+/* Care history status colors */
+.patient-care-history-status-completed {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.patient-care-history-status-active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.patient-care-history-status-other {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+/* Clearly distinguish collapsed vs opened visits */
+.patient-care-history-record {
+  border-left: 4px solid #cbd5e1;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.patient-care-history-record[open] {
+  border-left-color: #2563eb;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.patient-care-history-record:not([open]) > summary {
+  background: #ffffff;
+}
+
+.patient-care-history-record[open] > summary {
+  background: #eff6ff;
+}
+
+.patient-care-history-record > summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 10px;
+  font-size: 0.7rem;
+  color: #64748b;
+  transition: transform 160ms ease;
+}
+
+.patient-care-history-record[open] > summary::before {
+  transform: rotate(90deg);
+  color: #2563eb;
+}
+
+/* Clearly distinguish collapsed vs opened departments */
+.patient-history-step {
+  border: 1px solid #e2e8f0;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.patient-history-step[open] {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.patient-history-step > summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.65rem;
+  color: #64748b;
+  transition: transform 160ms ease;
+}
+
+.patient-history-step[open] > summary::before {
+  transform: rotate(90deg);
+  color: #2563eb;
+}
+
+/* Clinical / care / referral sections */
+.patient-history-clinical-section {
+  border-left: 4px solid #3b82f6;
+  background: #eff6ff;
+}
+
+.patient-history-care-record {
+  border-left: 4px solid #22c55e;
+  background: #f0fdf4;
+}
+
+.patient-history-referrals {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.patient-history-attachment {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+
+/* Care history summary */
+.patient-care-history-summary {
+  display: block;
+}
+
+.patient-care-history-summary-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.patient-care-history-summary-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patient-care-history-summary-title strong {
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.patient-care-history-summary-title small {
+  color: #64748b;
+}
+
+.patient-care-history-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.patient-care-history-summary-stats > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.patient-care-history-summary-stats strong {
+  color: #0f172a;
+}
+
+.patient-care-history-summary-stats small {
+  color: #64748b;
+}
+
+/* Completed / active status */
+.patient-care-history-status-completed {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.patient-care-history-status-active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.patient-care-history-status-other {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+/* Open vs closed */
+.patient-care-history-record {
+  border-left: 4px solid #cbd5e1;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.patient-care-history-record[open] {
+  border-left-color: #2563eb;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.patient-care-history-record[open] > summary {
+  background: #eff6ff;
+}
+
+.patient-care-history-record > summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 10px;
+  color: #64748b;
+  font-size: 0.7rem;
+  transition: transform 160ms ease;
+}
+
+.patient-care-history-record[open] > summary::before {
+  transform: rotate(90deg);
+  color: #2563eb;
+}
+
+@media (max-width: 640px) {
+  .patient-care-history-summary-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .patient-care-history-summary-stats {
+    gap: 6px;
+  }
+}
+
+/* =========================================================
+   CARE HISTORY — PATIENT PORTAL REDESIGN
+   Presentation only. No data/API changes.
+   ========================================================= */
+
+.patient-care-history-dropdown {
+  margin-top: 18px;
+  border: 1px solid #dbe3ef;
+  border-radius: 18px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+}
+
+.patient-care-history-dropdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #f8fbff, #ffffff);
+}
+
+.patient-care-history-dropdown > summary > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patient-care-history-dropdown > summary strong {
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.patient-care-history-dropdown > summary small {
+  color: #64748b;
+}
+
+.patient-care-history-dropdown > summary > span:last-child {
+  min-width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+/* Visit list */
+.patient-care-history-list {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+/* Visit card */
+.patient-care-history-record {
+  margin: 0;
+  border: 1px solid #dbe3ef;
+  border-left: 5px solid #94a3b8;
+  border-radius: 16px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.patient-care-history-record:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.patient-care-history-record[open] {
+  border-left-color: #2563eb;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.10);
+}
+
+/* Visit header */
+.patient-care-history-record > .patient-care-history-summary {
+  display: block;
+  padding: 18px;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.patient-care-history-record[open] > .patient-care-history-summary {
+  background: #eff6ff;
+}
+
+.patient-care-history-summary-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.patient-care-history-summary-title {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.patient-care-history-summary-title strong {
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.patient-care-history-summary-title small {
+  color: #64748b;
+}
+
+/* Status pills */
+.patient-care-history-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.patient-care-history-status-completed {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.patient-care-history-status-active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.patient-care-history-status-other {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+/* Summary statistics */
+.patient-care-history-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.patient-care-history-summary-stats > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.patient-care-history-summary-stats strong {
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.patient-care-history-summary-stats small {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+/* Open/closed indicator */
+.patient-care-history-record > summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 8px;
+  color: #64748b;
+  font-size: 0.65rem;
+  transition: transform 160ms ease;
+}
+
+.patient-care-history-record[open] > summary::before {
+  transform: rotate(90deg);
+  color: #2563eb;
+}
+
+/* Visit details */
+.patient-care-history-details {
+  padding: 18px;
+  background: #ffffff;
+}
+
+.patient-history-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.patient-history-overview > div {
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.patient-history-overview span,
+.patient-history-clinical-note span,
+.patient-history-step-content span,
+.patient-history-care-record span {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.patient-history-overview strong {
+  color: #0f172a;
+}
+
+/* Section headings */
+.patient-history-clinical-section,
+.patient-history-departments,
+.patient-history-referrals {
+  margin-top: 18px;
+}
+
+.patient-history-clinical-section > h4,
+.patient-history-departments > h4,
+.patient-history-referrals > h4 {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+/* Clinical information */
+.patient-history-clinical-section {
+  padding: 15px;
+  border: 1px solid #bfdbfe;
+  border-left: 5px solid #3b82f6;
+  border-radius: 14px;
+  background: #eff6ff;
+}
+
+.patient-history-clinical-note {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.patient-history-clinical-note + .patient-history-clinical-note {
+  margin-top: 10px;
+}
+
+.patient-history-clinical-note p,
+.patient-history-step-content p,
+.patient-history-care-record p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* Department cards */
+.patient-history-step {
+  margin-top: 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.patient-history-step[open] {
+  border-color: #93c5fd;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.06);
+}
+
+.patient-history-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.patient-history-step-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patient-history-step-header strong {
+  color: #0f172a;
+}
+
+.patient-history-step-header span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.patient-history-step-header b {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.patient-history-step-content {
+  padding: 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+/* Care records */
+.patient-history-care-records {
+  margin-top: 16px;
+}
+
+.patient-history-care-records h5 {
+  margin: 0 0 10px;
+  color: #166534;
+  font-size: 0.85rem;
+}
+
+.patient-history-care-record {
+  margin-top: 9px;
+  padding: 13px;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #22c55e;
+  border-radius: 11px;
+  background: #f0fdf4;
+}
+
+.patient-history-care-record > div + div {
+  margin-top: 11px;
+}
+
+/* Referrals */
+.patient-history-referrals {
+  padding: 15px;
+  border: 1px solid #fde68a;
+  border-left: 5px solid #f59e0b;
+  border-radius: 14px;
+  background: #fffbeb;
+}
+
+/* Documents */
+.patient-history-attachments {
+  display: grid;
+  gap: 7px;
+}
+
+.patient-history-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  .patient-care-history-summary-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .patient-care-history-summary-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .patient-history-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-history-step-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

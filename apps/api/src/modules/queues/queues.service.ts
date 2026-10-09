@@ -24,6 +24,12 @@ import { PrivateObjectStorageService } from '../storage/private-object-storage.s
 
 @Injectable()
 export class QueuesService {
+  private readonly queueTxOptions = {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    maxWait: 10000,
+    timeout: 30000,
+  } as const;
+
   constructor(
     private readonly database: DatabaseService,
     private readonly authorization: AuthorizationService,
@@ -143,6 +149,13 @@ export class QueuesService {
               toDepartmentId: true,
               toStepId: true,
               toDepartment: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              fromDepartment: {
                 select: {
                   id: true,
                   name: true,
@@ -518,11 +531,7 @@ export class QueuesService {
           await this.database.client.$transaction(
             (transaction) =>
               this.ensureJourneyForQueueEntry(transaction, userId, entry.tenantId, entry.id),
-            {
-              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-              maxWait: 10000,
-              timeout: 30000,
-            },
+            this.queueTxOptions,
           );
           repaired = true;
         } catch (error) {
@@ -847,11 +856,7 @@ export class QueuesService {
           await this.database.client.$transaction(
             (transaction) =>
               this.ensureJourneyForQueueEntry(transaction, userId, context.tenantId, existing.id),
-            {
-              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-              maxWait: 10000,
-              timeout: 30000,
-            },
+            this.queueTxOptions,
           );
         }
         alreadyQueued += 1;
@@ -875,9 +880,7 @@ export class QueuesService {
             queued += 1;
           }
         },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        },
+        this.queueTxOptions,
       );
     }
 
@@ -893,36 +896,39 @@ export class QueuesService {
   async listQueues(userId: string, query: QueueQueryDto) {
     const context = await this.authorization.getContext(userId);
 
-    const queues = await this.database.client.$transaction(async (tx) => {
-      const departments = await tx.department.findMany({
-        where: {
-          tenantId: context.tenantId,
-          status: 'ACTIVE',
-          deletedAt: null,
-        },
-        select: {
-          id: true,
-          branchId: true,
-        },
-      });
+    const queues = await this.database.client.$transaction(
+      async (tx) => {
+        const departments = await tx.department.findMany({
+          where: {
+            tenantId: context.tenantId,
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            branchId: true,
+          },
+        });
 
-      for (const department of departments) {
-        await this.ensureDepartmentQueue(tx, context.tenantId, department.id, department.branchId);
-      }
+        for (const department of departments) {
+          await this.ensureDepartmentQueue(tx, context.tenantId, department.id, department.branchId);
+        }
 
-      return tx.queue.findMany({
-        where: {
-          tenantId: context.tenantId,
-          ...(query.status ? { status: query.status } : {}),
-          ...(query.branchId ? { branchId: query.branchId } : {}),
-          ...(query.departmentId ? { departmentId: query.departmentId } : {}),
-        },
-        orderBy: {
-          name: 'asc',
-        },
-        select: this.queueSelect(),
-      });
-    });
+        return tx.queue.findMany({
+          where: {
+            tenantId: context.tenantId,
+            ...(query.status ? { status: query.status } : {}),
+            ...(query.branchId ? { branchId: query.branchId } : {}),
+            ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+          },
+          orderBy: {
+            name: 'asc',
+          },
+          select: this.queueSelect(),
+        });
+      },
+      this.queueTxOptions,
+    );
 
     return { data: queues };
   }
@@ -1622,10 +1628,7 @@ export class QueuesService {
 
           return entry;
         },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          timeout: 15000,
-        },
+        this.queueTxOptions,
       );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
@@ -1958,10 +1961,7 @@ export class QueuesService {
 
         return updated;
       },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        timeout: 15000,
-      },
+      this.queueTxOptions,
     );
   }
 
@@ -2133,10 +2133,7 @@ export class QueuesService {
             call,
           };
         },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          timeout: 15000,
-        },
+        this.queueTxOptions,
       );
     } catch (error) {
       if (
@@ -2226,9 +2223,7 @@ export class QueuesService {
           call,
         };
       },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      },
+      this.queueTxOptions,
     );
   }
 
@@ -2508,48 +2503,51 @@ export class QueuesService {
     await this.storage.put(storageKey, file.buffer, file.mimetype);
 
     try {
-      return await this.database.client.$transaction(async (tx) => {
-        const attachment = await tx.queueCareAttachment.create({
-          data: {
-            tenantId: context.tenantId,
-            careRecordId: careRecord.id,
-            uploadedByUserId: userId,
-            storageKey,
-            fileName,
-            contentType: file.mimetype,
-            byteSize: file.buffer.length,
-          },
-          select: {
-            id: true,
-            fileName: true,
-            contentType: true,
-            byteSize: true,
-            createdAt: true,
-          },
-        });
-
-        await tx.auditEvent.create({
-          data: {
-            tenantId: context.tenantId,
-            actorUserId: userId,
-            branchId: context.branchId ?? null,
-            action: 'QUEUE_DEPARTMENT_ATTACHMENT_UPLOADED',
-            resourceType: 'QUEUE_CARE_ATTACHMENT',
-            resourceId: attachment.id,
-            outcome: 'SUCCESS',
-            reason: 'Department clinical attachment uploaded',
-            metadata: {
+      return await this.database.client.$transaction(
+        async (tx) => {
+          const attachment = await tx.queueCareAttachment.create({
+            data: {
+              tenantId: context.tenantId,
               careRecordId: careRecord.id,
-              queueEntryId: careRecord.queueEntryId,
+              uploadedByUserId: userId,
+              storageKey,
               fileName,
               contentType: file.mimetype,
               byteSize: file.buffer.length,
             },
-          },
-        });
+            select: {
+              id: true,
+              fileName: true,
+              contentType: true,
+              byteSize: true,
+              createdAt: true,
+            },
+          });
 
-        return attachment;
-      });
+          await tx.auditEvent.create({
+            data: {
+              tenantId: context.tenantId,
+              actorUserId: userId,
+              branchId: context.branchId ?? null,
+              action: 'QUEUE_DEPARTMENT_ATTACHMENT_UPLOADED',
+              resourceType: 'QUEUE_CARE_ATTACHMENT',
+              resourceId: attachment.id,
+              outcome: 'SUCCESS',
+              reason: 'Department clinical attachment uploaded',
+              metadata: {
+                careRecordId: careRecord.id,
+                queueEntryId: careRecord.queueEntryId,
+                fileName,
+                contentType: file.mimetype,
+                byteSize: file.buffer.length,
+              },
+            },
+          });
+
+          return attachment;
+        },
+        this.queueTxOptions,
+      );
     } catch (error) {
       try {
         await this.storage.delete(storageKey);

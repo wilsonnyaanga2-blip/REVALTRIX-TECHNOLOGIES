@@ -279,7 +279,6 @@ export class PatientsService {
       orderBy: {
         startedAt: 'desc',
       },
-      take: 5,
       select: {
         id: true,
         tenantId: true,
@@ -340,6 +339,32 @@ export class PatientsService {
                 reason: true,
               },
             },
+            handoffsTo: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 1,
+              select: {
+                id: true,
+                status: true,
+                reason: true,
+                instruction: true,
+                createdAt: true,
+                acceptedAt: true,
+                fromDepartment: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+                toDepartment: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -381,6 +406,162 @@ export class PatientsService {
     const currentPositions = new Map<string, number>();
     const queuePositions = new Map<string, number>();
 
+    /*
+     * Patient-visible clinical/care history.
+     *
+     * These records are deliberately loaded separately from the journey
+     * query so the journey query remains efficient and the patient only
+     * receives records belonging to their own patient profile.
+     */
+    const encounterIds = [
+      ...new Set(
+        journeys
+          .map((journey) => journey.encounterId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const queueEntryIds = [
+      ...new Set(
+        journeys.flatMap((journey) =>
+          journey.steps.flatMap((step) =>
+            step.queueEntry ? [step.queueEntry.id] : [],
+          ),
+        ),
+      ),
+    ];
+
+    const [careRecords, clinicalNotes] = await Promise.all([
+      queueEntryIds.length
+        ? this.database.client.queueCareRecord.findMany({
+            where: {
+              queueEntryId: {
+                in: queueEntryIds,
+              },
+              tenantId: {
+                in: journeys.map((journey) => journey.tenantId),
+              },
+              queueEntry: {
+                patientTenantRecord: {
+                  patientProfileId: patient.id,
+                  deletedAt: null,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+            select: {
+              id: true,
+              queueEntryId: true,
+              encounterId: true,
+              departmentId: true,
+              note: true,
+              procedures: true,
+              documentUrl: true,
+              createdAt: true,
+              updatedAt: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              attachments: {
+                orderBy: {
+                  createdAt: 'asc',
+                },
+                select: {
+                  id: true,
+                  fileName: true,
+                  contentType: true,
+                  byteSize: true,
+                  createdAt: true,
+                },
+              },
+            },
+          })
+        : [],
+      encounterIds.length
+        ? this.database.client.clinicalNote.findMany({
+            where: {
+              encounterId: {
+                in: encounterIds,
+              },
+              tenantId: {
+                in: journeys.map((journey) => journey.tenantId),
+              },
+              patientTenantRecord: {
+                patientProfileId: patient.id,
+                deletedAt: null,
+              },
+              status: {
+                in: ['SIGNED', 'FINAL', 'AMENDED'],
+              },
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+            select: {
+              id: true,
+              encounterId: true,
+              noteNumber: true,
+              type: true,
+              status: true,
+              chiefComplaint: true,
+              subjective: true,
+              objective: true,
+              assessment: true,
+              plan: true,
+              signedAt: true,
+              finalizedAt: true,
+              createdAt: true,
+              updatedAt: true,
+              authorProvider: {
+                select: {
+                  id: true,
+                  providerNumber: true,
+                },
+              },
+              versions: {
+                orderBy: {
+                  versionNumber: 'asc',
+                },
+                select: {
+                  id: true,
+                  versionNumber: true,
+                  chiefComplaint: true,
+                  subjective: true,
+                  objective: true,
+                  assessment: true,
+                  plan: true,
+                  amendmentReason: true,
+                  signedAt: true,
+                  finalizedAt: true,
+                  createdAt: true,
+                },
+              },
+            },
+          })
+        : [],
+    ]);
+
+    const careRecordsByQueueEntry = new Map<string, typeof careRecords>();
+    for (const record of careRecords) {
+      const existing = careRecordsByQueueEntry.get(record.queueEntryId) ?? [];
+      existing.push(record);
+      careRecordsByQueueEntry.set(record.queueEntryId, existing);
+    }
+
+    const clinicalNotesByEncounter = new Map<string, typeof clinicalNotes>();
+    for (const note of clinicalNotes) {
+      const existing = clinicalNotesByEncounter.get(note.encounterId) ?? [];
+      existing.push(note);
+      clinicalNotesByEncounter.set(note.encounterId, existing);
+    }
+
+
     for (const entry of waitingEntries) {
       const position = (queuePositions.get(entry.queueId) ?? 0) + 1;
       queuePositions.set(entry.queueId, position);
@@ -404,6 +585,12 @@ export class PatientsService {
                   ? currentPositions.get(step.queueEntry.id) ?? null
                   : null,
             },
+            careRecords: careRecordsByQueueEntry.get(
+              step.queueEntry.id,
+            ) ?? [],
+            clinicalNotes: journey.encounterId
+              ? clinicalNotesByEncounter.get(journey.encounterId) ?? []
+              : [],
           };
         });
         const currentIndex = journey.steps.findIndex(
@@ -469,6 +656,417 @@ export class PatientsService {
               )
             : [],
           steps,
+        };
+      }),
+    };
+  }
+
+  async getMyCareHistory(userId: string) {
+    const patient = await this.database.client.patientProfile.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        user: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!patient) {
+      throw new NotFoundException(
+        'Authenticated user is not a Revaltrix patient',
+      );
+    }
+
+    if (patient.user.status !== 'ACTIVE') {
+      throw new NotFoundException(
+        'Patient account is not active',
+      );
+    }
+
+    const journeys = await this.database.client.patientJourney.findMany({
+      where: {
+        patientTenantRecord: {
+          patientProfileId: patient.id,
+          deletedAt: null,
+        },
+        status: {
+          in: ['ACTIVE', 'COMPLETED'],
+        },
+      },
+      orderBy: {
+        startedAt: 'desc',
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        encounterId: true,
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            legalName: true,
+            code: true,
+          },
+        },
+        steps: {
+          orderBy: {
+            sequence: 'asc',
+          },
+          select: {
+            id: true,
+            sequence: true,
+            type: true,
+            status: true,
+            name: true,
+            description: true,
+            location: true,
+            instruction: true,
+            readyAt: true,
+            startedAt: true,
+            completedAt: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+            queueEntry: {
+              select: {
+                id: true,
+                encounterId: true,
+              },
+            },
+            handoffsFrom: {
+              orderBy: {
+                createdAt: 'asc',
+              },
+              select: {
+                id: true,
+                status: true,
+                reason: true,
+                instruction: true,
+                createdAt: true,
+                acceptedAt: true,
+                completedAt: true,
+                fromDepartment: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+                toDepartment: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        handoffs: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+          select: {
+            id: true,
+            status: true,
+            reason: true,
+            instruction: true,
+            createdAt: true,
+            acceptedAt: true,
+            completedAt: true,
+            fromDepartment: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            toDepartment: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const queueEntryIds = [
+      ...new Set(
+        journeys.flatMap((journey) =>
+          journey.steps.flatMap((step) =>
+            step.queueEntry ? [step.queueEntry.id] : [],
+          ),
+        ),
+      ),
+    ];
+
+    const encounterIds = [
+      ...new Set(
+        journeys
+          .map((journey) => journey.encounterId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const [careRecords, clinicalNotes] = await Promise.all([
+      queueEntryIds.length
+        ? this.database.client.queueCareRecord.findMany({
+            where: {
+              queueEntryId: {
+                in: queueEntryIds,
+              },
+              queueEntry: {
+                patientTenantRecord: {
+                  patientProfileId: patient.id,
+                  deletedAt: null,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+            select: {
+              id: true,
+              queueEntryId: true,
+              encounterId: true,
+              departmentId: true,
+              note: true,
+              procedures: true,
+              createdAt: true,
+              updatedAt: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              attachments: {
+                orderBy: {
+                  createdAt: 'asc',
+                },
+                select: {
+                  id: true,
+                  fileName: true,
+                  contentType: true,
+                  byteSize: true,
+                  createdAt: true,
+                },
+              },
+            },
+          })
+        : [],
+      encounterIds.length
+        ? this.database.client.clinicalNote.findMany({
+            where: {
+              encounterId: {
+                in: encounterIds,
+              },
+              patientTenantRecord: {
+                patientProfileId: patient.id,
+                deletedAt: null,
+              },
+              status: {
+                in: ['SIGNED', 'FINAL', 'AMENDED'],
+              },
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+            select: {
+              id: true,
+              encounterId: true,
+              type: true,
+              status: true,
+              chiefComplaint: true,
+              subjective: true,
+              objective: true,
+              assessment: true,
+              plan: true,
+              signedAt: true,
+              finalizedAt: true,
+              createdAt: true,
+              updatedAt: true,
+              versions: {
+                orderBy: {
+                  versionNumber: 'asc',
+                },
+                select: {
+                  versionNumber: true,
+                  chiefComplaint: true,
+                  subjective: true,
+                  objective: true,
+                  assessment: true,
+                  plan: true,
+                  amendmentReason: true,
+                  signedAt: true,
+                  finalizedAt: true,
+                  createdAt: true,
+                },
+              },
+            },
+          })
+        : [],
+    ]);
+
+    const careRecordsByQueueEntry = new Map<string, typeof careRecords>();
+
+    for (const record of careRecords) {
+      const records =
+        careRecordsByQueueEntry.get(record.queueEntryId) ?? [];
+
+      records.push(record);
+      careRecordsByQueueEntry.set(record.queueEntryId, records);
+    }
+
+    const clinicalNotesByEncounter = new Map<
+      string,
+      typeof clinicalNotes
+    >();
+
+    for (const note of clinicalNotes) {
+      const notes =
+        clinicalNotesByEncounter.get(note.encounterId) ?? [];
+
+      notes.push(note);
+      clinicalNotesByEncounter.set(note.encounterId, notes);
+    }
+
+    return {
+      data: journeys.map((journey) => {
+        const departmentSteps = journey.steps
+          .filter(
+            (step) =>
+              step.type === 'SERVICE' ||
+              step.type === 'CHECK_IN',
+          )
+          .map((step) => {
+            const care =
+              step.queueEntry
+                ? careRecordsByQueueEntry.get(
+                    step.queueEntry.id,
+                  ) ?? []
+                : [];
+
+            return {
+              sequence: step.sequence,
+              type: step.type,
+              status: step.status,
+              name: step.name,
+              description: step.description,
+              location: step.location,
+              instruction: step.instruction,
+              branch: step.branch,
+              department: step.department,
+
+              startedAt: step.startedAt,
+              completedAt: step.completedAt,
+
+              care: care.map((record) => ({
+                department: record.department,
+                note: record.note,
+                procedures: record.procedures,
+                recordedAt: record.createdAt,
+                updatedAt: record.updatedAt,
+                attachments: record.attachments.map(
+                  (attachment) => ({
+                    id: attachment.id,
+                    fileName: attachment.fileName,
+                    contentType: attachment.contentType,
+                    byteSize: attachment.byteSize,
+                    createdAt: attachment.createdAt,
+                  }),
+                ),
+              })),
+
+              referrals: step.handoffsFrom.map((handoff) => ({
+                status: handoff.status,
+                fromDepartment:
+                  handoff.fromDepartment?.name ?? null,
+                toDepartment:
+                  handoff.toDepartment?.name ?? null,
+                reason: handoff.reason,
+                instruction: handoff.instruction,
+                createdAt: handoff.createdAt,
+                acceptedAt: handoff.acceptedAt,
+                completedAt: handoff.completedAt,
+              })),
+            };
+          });
+
+        return {
+          facility: {
+            name: journey.tenant.name,
+            legalName: journey.tenant.legalName,
+            code: journey.tenant.code,
+          },
+
+          date: journey.startedAt,
+          status: journey.status,
+
+          clinicalNotes: journey.encounterId
+            ? (
+                clinicalNotesByEncounter.get(
+                  journey.encounterId,
+                ) ?? []
+              ).map((note) => ({
+                type: note.type,
+                status: note.status,
+                chiefComplaint: note.chiefComplaint,
+                subjective: note.subjective,
+                objective: note.objective,
+                assessment: note.assessment,
+                plan: note.plan,
+                signedAt: note.signedAt,
+                finalizedAt: note.finalizedAt,
+                createdAt: note.createdAt,
+                updatedAt: note.updatedAt,
+                versions: note.versions.map((version) => ({
+                  versionNumber: version.versionNumber,
+                  chiefComplaint: version.chiefComplaint,
+                  subjective: version.subjective,
+                  objective: version.objective,
+                  assessment: version.assessment,
+                  plan: version.plan,
+                  amendmentReason: version.amendmentReason,
+                  signedAt: version.signedAt,
+                  finalizedAt: version.finalizedAt,
+                  createdAt: version.createdAt,
+                })),
+              }))
+            : [],
+
+          departments: departmentSteps,
+
+          referrals: journey.handoffs.map((handoff) => ({
+            status: handoff.status,
+            fromDepartment:
+              handoff.fromDepartment?.name ?? null,
+            toDepartment:
+              handoff.toDepartment?.name ?? null,
+            reason: handoff.reason,
+            instruction: handoff.instruction,
+            createdAt: handoff.createdAt,
+            acceptedAt: handoff.acceptedAt,
+            completedAt: handoff.completedAt,
+          })),
         };
       }),
     };

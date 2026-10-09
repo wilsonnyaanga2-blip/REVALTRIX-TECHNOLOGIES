@@ -91,8 +91,14 @@ export interface QueueEntry {
       status: string;
       reason: string | null;
       instruction: string | null;
+      fromDepartmentId: string | null;
       toDepartmentId: string | null;
       toStepId: string | null;
+      fromDepartment?: {
+        id: string;
+        name: string;
+        code: string;
+      } | null;
       toDepartment?: {
         id: string;
         name: string;

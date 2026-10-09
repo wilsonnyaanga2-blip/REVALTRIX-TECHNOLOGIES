@@ -9,6 +9,8 @@ import {
   NotificationChannel,
   NotificationDeliveryStatus,
 } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import webPush from 'web-push';
 
 import { DatabaseService } from '../../database/database.service.js';
 import { EmailService } from '../communication/email/email.service.js';
@@ -28,13 +30,26 @@ export class NotificationDeliveryService
   constructor(
     private readonly database: DatabaseService,
     private readonly emailService: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   onModuleInit() {
-    void this.processPendingEmails();
+    const publicKey = this.config.get<string>('notifications.webPush.publicKey');
+    const privateKey = this.config.get<string>('notifications.webPush.privateKey');
+
+    if (publicKey && privateKey) {
+      webPush.setVapidDetails(
+        this.config.get<string>('notifications.webPush.subject') ??
+          'mailto:admin@revaltrix.com',
+        publicKey,
+        privateKey,
+      );
+    }
+
+    void this.processPendingDeliveries();
 
     this.timer = setInterval(() => {
-      void this.processPendingEmails();
+      void this.processPendingDeliveries();
     }, this.intervalMs);
   }
 
@@ -45,7 +60,7 @@ export class NotificationDeliveryService
     }
   }
 
-  private async processPendingEmails(): Promise<void> {
+  private async processPendingDeliveries(): Promise<void> {
     if (this.processing) {
       return;
     }
@@ -58,7 +73,9 @@ export class NotificationDeliveryService
       const deliveries =
         await this.database.client.notificationDelivery.findMany({
           where: {
-            channel: NotificationChannel.EMAIL,
+            channel: {
+              in: [NotificationChannel.EMAIL, NotificationChannel.PUSH],
+            },
             status: NotificationDeliveryStatus.PENDING,
             availableAt: {
               lte: now,
@@ -78,7 +95,7 @@ export class NotificationDeliveryService
       }
     } catch (error) {
       this.logger.error(
-        'Notification email processing cycle failed',
+        'Notification delivery processing cycle failed',
         error instanceof Error ? error.stack : String(error),
       );
     } finally {
@@ -91,7 +108,9 @@ export class NotificationDeliveryService
       await this.database.client.notificationDelivery.updateMany({
         where: {
           id: deliveryId,
-          channel: NotificationChannel.EMAIL,
+          channel: {
+            in: [NotificationChannel.EMAIL, NotificationChannel.PUSH],
+          },
           status: NotificationDeliveryStatus.PENDING,
           availableAt: {
             lte: new Date(),
@@ -117,11 +136,16 @@ export class NotificationDeliveryService
         },
         select: {
           id: true,
+          channel: true,
           attempts: true,
           notification: {
             select: {
+              id: true,
+              type: true,
               title: true,
               body: true,
+              data: true,
+              recipientUserId: true,
               recipientUser: {
                 select: {
                   identities: {
@@ -148,6 +172,11 @@ export class NotificationDeliveryService
       });
 
     if (!delivery) {
+      return;
+    }
+
+    if (delivery.channel === NotificationChannel.PUSH) {
+      await this.processPushDelivery(delivery);
       return;
     }
 
@@ -195,6 +224,129 @@ export class NotificationDeliveryService
         error instanceof Error ? error.message : String(error),
       );
     }
+  }
+
+  private async processPushDelivery(delivery: {
+    id: string;
+    attempts: number;
+    notification: {
+      id: string;
+      type: string;
+      title: string;
+      body: string;
+      data: unknown;
+      recipientUserId: string;
+    };
+  }): Promise<void> {
+    const publicKey = this.config.get<string>('notifications.webPush.publicKey');
+    const privateKey = this.config.get<string>('notifications.webPush.privateKey');
+
+    if (!publicKey || !privateKey) {
+      await this.failDelivery(
+        delivery.id,
+        delivery.attempts,
+        'Web push is not configured on this server.',
+      );
+      return;
+    }
+
+    const subscriptions =
+      await this.database.client.webPushSubscription.findMany({
+        where: {
+          userId: delivery.notification.recipientUserId,
+        },
+        select: {
+          id: true,
+          endpoint: true,
+          p256dh: true,
+          auth: true,
+        },
+      });
+
+    if (subscriptions.length === 0) {
+      await this.database.client.notificationDelivery.update({
+        where: {
+          id: delivery.id,
+        },
+        data: {
+          status: NotificationDeliveryStatus.SENT,
+          sentAt: new Date(),
+          failureReason: null,
+        },
+      });
+      return;
+    }
+
+    const payload = JSON.stringify({
+      id: delivery.notification.id,
+      type: delivery.notification.type,
+      title: delivery.notification.title,
+      body: delivery.notification.body,
+      data: delivery.notification.data,
+    });
+
+    const results = await Promise.allSettled(
+      subscriptions.map(async (subscription) => {
+        try {
+          await webPush.sendNotification(
+            {
+              endpoint: subscription.endpoint,
+              keys: {
+                p256dh: subscription.p256dh,
+                auth: subscription.auth,
+              },
+            },
+            payload,
+          );
+        } catch (error) {
+          const statusCode =
+            typeof error === 'object' && error !== null && 'statusCode' in error
+              ? error.statusCode
+              : undefined;
+
+          if (statusCode === 404 || statusCode === 410) {
+            await this.database.client.webPushSubscription.deleteMany({
+              where: {
+                id: subscription.id,
+              },
+            });
+            return;
+          }
+
+          throw error;
+        }
+      }),
+    );
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult =>
+        result.status === 'rejected',
+    );
+
+    if (failures.length === subscriptions.length) {
+      await this.failDelivery(
+        delivery.id,
+        delivery.attempts,
+        failures
+          .map((failure) =>
+            failure.reason instanceof Error
+              ? failure.reason.message
+              : String(failure.reason),
+          )
+          .join('; '),
+      );
+      return;
+    }
+
+    await this.database.client.notificationDelivery.update({
+      where: {
+        id: delivery.id,
+      },
+      data: {
+        status: NotificationDeliveryStatus.SENT,
+        sentAt: new Date(),
+        failureReason: null,
+      },
+    });
   }
 
   private async failDelivery(

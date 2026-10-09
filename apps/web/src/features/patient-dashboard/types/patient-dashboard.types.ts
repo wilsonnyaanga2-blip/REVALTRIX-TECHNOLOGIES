@@ -100,6 +100,22 @@ export interface PatientJourneyStep {
     completedAt: string | null;
     reason?: string | null;
   } | null;
+  handoffsTo?: Array<{
+    id: string;
+    status: string;
+    reason: string | null;
+    instruction: string | null;
+    createdAt: string;
+    acceptedAt: string | null;
+    fromDepartment: {
+      id: string;
+      name: string;
+    } | null;
+    toDepartment: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
 }
 
 export interface PatientJourney {
@@ -118,3 +134,103 @@ export interface PatientJourney {
 export interface PatientJourneyResponse {
   data: PatientJourney[];
 }
+
+export interface CareHistoryAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  byteSize: number;
+  createdAt: string;
+}
+
+export interface CareHistoryRecord {
+  department: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  note: string | null;
+  procedures: string | null;
+  recordedAt: string;
+  updatedAt: string;
+  attachments: CareHistoryAttachment[];
+}
+
+export interface CareHistoryReferral {
+  status: string;
+  fromDepartment: string | null;
+  toDepartment: string | null;
+  reason: string | null;
+  instruction: string | null;
+  createdAt: string;
+  acceptedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface CareHistoryDepartment {
+  sequence: number;
+  type: string;
+  status: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  instruction: string | null;
+  branch: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  department: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  care: CareHistoryRecord[];
+  referrals: CareHistoryReferral[];
+}
+
+export interface CareHistoryClinicalNote {
+  type: string;
+  status: string;
+  chiefComplaint: string | null;
+  subjective: string | null;
+  objective: string | null;
+  assessment: string | null;
+  plan: string | null;
+  signedAt: string | null;
+  finalizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  versions: Array<{
+    versionNumber: number;
+    chiefComplaint: string | null;
+    subjective: string | null;
+    objective: string | null;
+    assessment: string | null;
+    plan: string | null;
+    amendmentReason: string | null;
+    signedAt: string | null;
+    finalizedAt: string | null;
+    createdAt: string;
+  }>;
+}
+
+export interface CareHistoryItem {
+  facility: {
+    name: string;
+    legalName: string | null;
+    code: string;
+  };
+  date: string;
+  status: string;
+  clinicalNotes: CareHistoryClinicalNote[];
+  departments: CareHistoryDepartment[];
+  referrals: CareHistoryReferral[];
+}
+
+export interface CareHistoryResponse {
+  data: CareHistoryItem[];
+}
+

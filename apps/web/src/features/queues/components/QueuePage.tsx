@@ -225,7 +225,9 @@ function renderActions(
 export function QueuePage({ onNavigate }: QueuePageProps) {
   const [queues, setQueues] = useState<Queue[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedQueueId, setSelectedQueueId] = useState('');
+  const [selectedQueueId, setSelectedQueueId] = useState(
+    () => new URLSearchParams(window.location.search).get('queueId') ?? '',
+  );
   const [entries, setEntries] = useState<QueueEntry[]>([]);
 
   const [queueName, setQueueName] = useState('');
@@ -453,6 +455,11 @@ export function QueuePage({ onNavigate }: QueuePageProps) {
 
     try {
       let createdRecord: { id: string } | null = null;
+      let destinationStaffNotified = 0;
+      let destinationName =
+        departments.find((department) => department.id === destinationDepartmentId)?.name ??
+        'the selected department';
+
       if (note || procedures || documentUrl || (isReferral && referralReason.trim())) {
         createdRecord = await createQueueCareRecord(careEntry.id, {
           note: note || (isReferral ? referralReason.trim() : undefined),
@@ -482,12 +489,14 @@ export function QueuePage({ onNavigate }: QueuePageProps) {
           );
         }
 
-        await createPatientJourneyHandoff(currentStep.journeyId, {
+        const handoffResult = await createPatientJourneyHandoff(currentStep.journeyId, {
           fromStepId: currentStep.id,
           toDepartmentId: destinationDepartmentId,
           reason: referralReason.trim(),
           instruction: referralInstruction.trim() || undefined,
         });
+
+        destinationStaffNotified = handoffResult.data.destinationStaffNotified;
       } else if (carePurpose === 'complete') {
         await completeQueueEntry(careEntry.id);
       }
@@ -501,11 +510,10 @@ export function QueuePage({ onNavigate }: QueuePageProps) {
         setCareDocumentUrl('');
         setSuccess('Department clinical record saved.');
       } else if (isReferral) {
-        const destinationName =
-          departments.find((department) => department.id === destinationDepartmentId)?.name ??
-          'the selected department';
         setSuccess(
-          `${careEntry.queueNumber} referred to ${destinationName} and added to its queue.`,
+          destinationStaffNotified > 0
+            ? `${careEntry.queueNumber} referred to ${destinationName} and added to its queue. ${destinationStaffNotified} destination staff member(s) notified.`
+            : `${careEntry.queueNumber} was added to ${destinationName}'s queue, but no active department staff received a notification. Check the department's staff assignments.`,
         );
         setCareEntry(null);
       } else if (carePurpose === 'complete') {
@@ -882,7 +890,7 @@ export function QueuePage({ onNavigate }: QueuePageProps) {
                               <Badge>
                                 Referred
                                 {handoff.toDepartment?.name
-                                  ? ` → ${handoff.toDepartment.name}`
+                                  ? ` from ${handoff.fromDepartment?.name ?? entry.queue.department?.name ?? 'department'} → ${handoff.toDepartment.name}`
                                   : ''}
                               </Badge>
                             );
@@ -1097,7 +1105,11 @@ export function QueuePage({ onNavigate }: QueuePageProps) {
             {carePurpose === 'view' && referredHandoff(careEntry) ? (
               <section className="queue-panel" aria-label="Referral details">
                 <h3>
-                  Referred to{' '}
+                  Referred from{' '}
+                  {referredHandoff(careEntry)?.fromDepartment?.name ??
+                    careEntry.queue.department?.name ??
+                    'department'}
+                  {' to '}
                   {referredHandoff(careEntry)?.toDepartment?.name ?? 'another department'}
                 </h3>
                 <p>

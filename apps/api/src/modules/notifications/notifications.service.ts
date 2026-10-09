@@ -1,7 +1,10 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
   NotificationChannel,
@@ -14,7 +17,92 @@ import { DatabaseService } from '../../database/database.service.js';
 export class NotificationsService {
   constructor(
     private readonly database: DatabaseService,
+    private readonly config: ConfigService,
   ) {}
+
+  getWebPushPublicKey() {
+    const publicKey =
+      this.config.get<string>('notifications.webPush.publicKey');
+    const privateKey =
+      this.config.get<string>('notifications.webPush.privateKey');
+
+    return {
+      data: {
+        publicKey: publicKey && privateKey ? publicKey : '',
+      },
+    };
+  }
+
+  async saveWebPushSubscription(
+    userId: string,
+    subscription: {
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+    },
+  ) {
+    if (
+      !this.config.get<string>('notifications.webPush.publicKey') ||
+      !this.config.get<string>('notifications.webPush.privateKey')
+    ) {
+      throw new BadRequestException('Web push is not configured on this server.');
+    }
+
+    const existing =
+      await this.database.client.webPushSubscription.findUnique({
+        where: {
+          endpoint: subscription.endpoint,
+        },
+        select: {
+          userId: true,
+        },
+      });
+
+    if (existing && existing.userId !== userId) {
+      throw new ConflictException(
+        'This browser push subscription is already linked to another account.',
+      );
+    }
+
+    const saved =
+      await this.database.client.webPushSubscription.upsert({
+        where: {
+          endpoint: subscription.endpoint,
+        },
+        create: {
+          userId,
+          ...subscription,
+        },
+        update: {
+          userId,
+          p256dh: subscription.p256dh,
+          auth: subscription.auth,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    return {
+      data: saved,
+    };
+  }
+
+  async deleteWebPushSubscription(userId: string, endpoint: string) {
+    const result =
+      await this.database.client.webPushSubscription.deleteMany({
+        where: {
+          userId,
+          endpoint,
+        },
+      });
+
+    return {
+      data: {
+        deleted: result.count,
+      },
+    };
+  }
 
   async listMyNotifications(
     userId: string,

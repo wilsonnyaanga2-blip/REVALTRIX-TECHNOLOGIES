@@ -59,6 +59,12 @@ interface QueueReconciliationResponse {
   data: QueueReconciliationResult;
 }
 
+interface PatientJourneyHandoffResponse {
+  data: {
+    destinationStaffNotified: number;
+  };
+}
+
 export async function getQueues(): Promise<Queue[]> {
   const response = await authenticatedApiRequest<QueueListResponse>('/v1/queues?status=ACTIVE');
 
@@ -198,9 +204,12 @@ export async function createPatientJourneyHandoff(
     reason: string;
     instruction?: string;
   },
-): Promise<unknown> {
-  return authenticatedApiRequest(`/v1/patient-journeys/${encodeURIComponent(journeyId)}/handoffs`, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+): Promise<PatientJourneyHandoffResponse> {
+  return authenticatedApiRequest<PatientJourneyHandoffResponse>(
+    `/v1/patient-journeys/${encodeURIComponent(journeyId)}/handoffs`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
 }

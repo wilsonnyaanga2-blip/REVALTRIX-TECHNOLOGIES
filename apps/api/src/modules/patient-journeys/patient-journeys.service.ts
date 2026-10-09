@@ -5,12 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  NotificationChannel,
   PatientJourneyHandoffStatus,
   PatientJourneyStepStatus,
   PatientJourneyStepType,
   Prisma,
   RecordStatus,
 } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 
 import { DatabaseService } from '../../database/database.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
@@ -23,6 +25,7 @@ export class PatientJourneysService {
     private readonly database: DatabaseService,
     private readonly authorization: AuthorizationService,
     private readonly queues: QueuesService,
+    private readonly config: ConfigService,
   ) {}
 
   async createHandoff(userId: string, journeyId: string, dto: CreateHandoffDto) {
@@ -49,6 +52,15 @@ export class PatientJourneysService {
           encounterId: true,
           patientTenantRecordId: true,
           status: true,
+          patientTenantRecord: {
+            select: {
+              patientProfile: {
+                select: {
+                  userId: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -68,6 +80,11 @@ export class PatientJourneysService {
           status: true,
           branchId: true,
           departmentId: true,
+          department: {
+            select: {
+              name: true,
+            },
+          },
           queueEntryId: true,
         },
       });
@@ -204,6 +221,7 @@ export class PatientJourneysService {
 
       const handoffSequence = (nextSequence._max.sequence ?? 0) + 1;
       const serviceSequence = handoffSequence + 1;
+      const now = new Date();
 
       const handoffStep = await tx.patientJourneyStep.create({
         data: {
@@ -211,7 +229,7 @@ export class PatientJourneysService {
           journeyId: journey.id,
           sequence: handoffSequence,
           type: PatientJourneyStepType.HANDOFF,
-          status: PatientJourneyStepStatus.PENDING,
+          status: PatientJourneyStepStatus.COMPLETED,
           name: `Proceed to ${destinationDepartment.name}`,
           description:
             reason,
@@ -222,7 +240,8 @@ export class PatientJourneysService {
           instruction:
             dto.instruction?.trim() ||
             `Proceed to ${destinationDepartment.name} and follow the department's check-in instructions.`,
-          readyAt: new Date(),
+          readyAt: now,
+          completedAt: now,
         },
         select: {
           id: true,
@@ -280,8 +299,6 @@ export class PatientJourneysService {
           createdAt: true,
         },
       });
-
-      const now = new Date();
 
       const sourceQueueEntry = await tx.queueEntry.findFirst({
         where: {
@@ -375,6 +392,109 @@ export class PatientJourneysService {
         },
       });
 
+      const notification = await tx.notification.create({
+        data: {
+          tenantId: context.tenantId,
+          recipientUserId:
+            journey.patientTenantRecord.patientProfile.userId,
+          type: 'PATIENT_DEPARTMENT_REFERRED',
+          title: `Referred to ${destinationDepartment.name}`,
+          body: `You have been referred from ${fromStep.department?.name ?? 'your current department'} to ${destinationDepartment.name}. Open your patient dashboard for referral details.`,
+          data: {
+            journeyId: journey.id,
+            handoffId: handoff.id,
+            fromDepartmentId: fromStep.departmentId,
+            fromDepartmentName: fromStep.department?.name ?? null,
+            toDepartmentId: destinationDepartment.id,
+            toDepartmentName: destinationDepartment.name,
+            destinationQueueId: destinationEntry.queueId,
+            destinationQueueEntryId: destinationEntry.id,
+            destinationQueueNumber: destinationEntry.queueNumber,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const pushConfigured =
+        Boolean(this.config.get<string>('notifications.webPush.publicKey')) &&
+        Boolean(this.config.get<string>('notifications.webPush.privateKey'));
+      const notificationChannels = [
+        NotificationChannel.IN_APP,
+        ...(pushConfigured ? [NotificationChannel.PUSH] : []),
+      ];
+
+      await tx.notificationDelivery.createMany({
+        data: notificationChannels.map((channel) => ({
+          notificationId: notification.id,
+          channel,
+          status: 'PENDING',
+          idempotencyKey: `patient-referral:${handoff.id}:${channel}`,
+        })),
+      });
+
+      const activeDestinationMemberships = await tx.membership.findMany({
+        where: {
+          tenantId: context.tenantId,
+          departmentId: destinationDepartment.id,
+          status: 'ACTIVE',
+          startsAt: {
+            lte: now,
+          },
+          OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+          user: {
+            status: RecordStatus.ACTIVE,
+            deletedAt: null,
+          },
+        },
+        select: {
+          userId: true,
+        },
+      });
+      const destinationUserIds = [
+        ...new Set(activeDestinationMemberships.map((membership) => membership.userId)),
+      ];
+
+      if (destinationUserIds.length > 0) {
+        const staffNotifications = await tx.notification.createManyAndReturn({
+          data: destinationUserIds.map((recipientUserId) => ({
+            tenantId: context.tenantId,
+            recipientUserId,
+            type: 'PATIENT_DEPARTMENT_REFERRAL_RECEIVED',
+            title: `New referral to ${destinationDepartment.name}`,
+            body: `A patient was referred from ${fromStep.department?.name ?? 'another department'} and is waiting in queue ${destinationEntry.queueNumber}. Clinical reason: ${reason}`,
+            data: {
+              journeyId: journey.id,
+              handoffId: handoff.id,
+              encounterId: journey.encounterId,
+              fromDepartmentId: fromStep.departmentId,
+              fromDepartmentName: fromStep.department?.name ?? null,
+              toDepartmentId: destinationDepartment.id,
+              toDepartmentName: destinationDepartment.name,
+              destinationQueueId: destinationEntry.queueId,
+              destinationQueueEntryId: destinationEntry.id,
+              destinationQueueNumber: destinationEntry.queueNumber,
+            },
+          })),
+          select: {
+            id: true,
+            recipientUserId: true,
+          },
+        });
+
+        await tx.notificationDelivery.createMany({
+          data: staffNotifications.flatMap((staffNotification) =>
+            notificationChannels.map((channel) => ({
+              notificationId: staffNotification.id,
+              channel,
+              status: 'PENDING' as const,
+              idempotencyKey: `patient-referral:${handoff.id}:department:${staffNotification.recipientUserId}:${channel}`,
+            })),
+          ),
+        });
+      }
+
       await tx.auditEvent.create({
         data: {
           tenantId: context.tenantId,
@@ -392,6 +512,7 @@ export class PatientJourneysService {
             toStepId: serviceStep.id,
             fromDepartmentId: fromStep.departmentId,
             toDepartmentId: destinationDepartment.id,
+            destinationStaffNotified: destinationUserIds.length,
           },
         },
       });
@@ -401,11 +522,13 @@ export class PatientJourneysService {
           handoff,
           handoffStep,
           destinationStep: serviceStep,
+          destinationStaffNotified: destinationUserIds.length,
         },
       };
     },
     {
-      timeout: 15000,
+      maxWait: 10000,
+      timeout: 30000,
     },
   );
   }

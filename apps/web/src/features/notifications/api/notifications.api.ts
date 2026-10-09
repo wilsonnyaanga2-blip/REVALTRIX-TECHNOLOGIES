@@ -64,3 +64,42 @@ export async function acknowledgeMyQueueCall(
     },
   );
 }
+
+export async function getWebPushPublicKey(): Promise<string> {
+  const response = await authenticatedApiRequest<{
+    data: {
+      publicKey: string;
+    };
+  }>('/v1/notifications/push/public-key');
+
+  return response.data.publicKey;
+}
+
+export async function saveWebPushSubscription(
+  subscription: {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  },
+): Promise<void> {
+  await authenticatedApiRequest('/v1/notifications/push-subscriptions', {
+    method: 'POST',
+    body: JSON.stringify(subscription),
+  });
+}
+
+export async function deleteWebPushSubscription(
+  endpoint: string,
+  keys: {
+    p256dh: string;
+    auth: string;
+  },
+): Promise<void> {
+  await authenticatedApiRequest('/v1/notifications/push-subscriptions', {
+    method: 'DELETE',
+    body: JSON.stringify({
+      endpoint,
+      ...keys,
+    }),
+  });
+}

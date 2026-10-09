@@ -18,6 +18,7 @@ import { ServicesPage } from '../../services/components/ServicesPage.js';
 import { PatientsPage } from '../../patients/components/PatientsPage.js';
 import { EncountersPage } from '../../encounters/components/EncountersPage.js';
 import { QueuePage } from '../../queues/components/QueuePage.js';
+import { NotificationsPage } from '../../notifications/pages/NotificationsPage.js';
 import { clearAuthSession } from '../../auth/api/auth-session.js';
 
 interface AuthenticatedDashboardPageProps {
@@ -219,6 +220,10 @@ export function AuthenticatedDashboardPage({
 
     if (requestedPath === '/tenant/queue') {
       return <QueuePage onNavigate={onNavigate} />;
+    }
+
+    if (requestedPath === '/tenant/notifications') {
+      return <NotificationsPage onNavigate={onNavigate} />;
     }
 
     if (

@@ -43,6 +43,15 @@ export class PatientsController {
     );
   }
 
+  @Get('me/care-history')
+  async getMyCareHistory(
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.patientsService.getMyCareHistory(
+      request.auth.userId,
+    );
+  }
+
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('patients', 'read')

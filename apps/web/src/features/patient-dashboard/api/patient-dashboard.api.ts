@@ -2,6 +2,7 @@ import { authenticatedApiRequest } from '../../../lib/auth-api.js';
 import type {
   PatientDashboardResponse,
   PatientJourneyResponse,
+  CareHistoryResponse,
 } from '../types/patient-dashboard.types.js';
 
 export async function getMyPatientDashboard(): Promise<PatientDashboardResponse> {
@@ -39,5 +40,11 @@ export async function declinePatientRelationshipRequest(
 export async function getMyPatientJourney(): Promise<PatientJourneyResponse> {
   return authenticatedApiRequest<PatientJourneyResponse>(
     '/v1/patients/me/journey',
+  );
+}
+
+export async function getMyCareHistory(): Promise<CareHistoryResponse> {
+  return authenticatedApiRequest<CareHistoryResponse>(
+    '/v1/patients/me/care-history',
   );
 }

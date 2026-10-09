@@ -19,4 +19,12 @@ export default () => ({
     secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY ?? '',
     forcePathStyle: process.env.STORAGE_FORCE_PATH_STYLE === 'true',
   },
+
+  notifications: {
+    webPush: {
+      publicKey: process.env.WEB_PUSH_PUBLIC_KEY ?? '',
+      privateKey: process.env.WEB_PUSH_PRIVATE_KEY ?? '',
+      subject: process.env.WEB_PUSH_SUBJECT ?? 'mailto:admin@revaltrix.com',
+    },
+  },
 });
