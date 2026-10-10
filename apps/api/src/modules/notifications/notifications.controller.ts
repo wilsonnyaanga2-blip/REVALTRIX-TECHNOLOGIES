@@ -51,6 +51,17 @@ export class NotificationsController {
     );
   }
 
+  @Delete(':notificationId')
+  async deleteMyNotification(
+    @Req() request: AuthenticatedRequest,
+    @Param('notificationId') notificationId: string,
+  ) {
+    return this.notificationsService.deleteMyNotification(
+      request.auth.userId,
+      notificationId,
+    );
+  }
+
   @Get()
   async list(
     @Req() request: AuthenticatedRequest,

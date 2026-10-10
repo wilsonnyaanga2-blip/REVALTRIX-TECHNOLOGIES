@@ -200,6 +200,25 @@ export class NotificationsService {
     };
   }
 
+  async deleteMyNotification(userId: string, notificationId: string) {
+    const result = await this.database.client.notification.deleteMany({
+      where: {
+        id: notificationId,
+        recipientUserId: userId,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException('Notification not found.');
+    }
+
+    return {
+      data: {
+        deleted: true,
+      },
+    };
+  }
+
   async markAsRead(
     userId: string,
     notificationId: string,

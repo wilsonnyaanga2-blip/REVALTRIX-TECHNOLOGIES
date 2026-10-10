@@ -93,6 +93,41 @@ export class VerificationEmailService {
     });
   }
 
+  async sendFamilyAccessStepUp(
+    email: string,
+    code: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    const expiresInMinutes = Math.max(
+      1,
+      Math.ceil((expiresAt.getTime() - Date.now()) / 60000),
+    );
+    await this.emailService.send({
+      to: email,
+      subject: `${code} is your Revaltrix security code`,
+      text: [
+        'Revaltrix security check',
+        '',
+        `Your one-time security code is ${code}.`,
+        `It expires in ${expiresInMinutes} minutes and can be used once.`,
+        'Use this code only for an action you initiated in your Revaltrix account.',
+        'If you did not request this code, secure your account and contact support.',
+      ].join('\n'),
+      html: `
+        <!doctype html>
+        <html lang="en">
+          <body style="font-family:Arial,Helvetica,sans-serif;color:#202124">
+            <h1>Revaltrix security check</h1>
+            <p>Your one-time security code is:</p>
+            <p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p>
+            <p>This code expires in ${expiresInMinutes} minutes and can be used once.</p>
+            <p>If you did not request this code, secure your account and contact support.</p>
+          </body>
+        </html>
+      `,
+    });
+  }
+
   async sendPatientOnboarding(
     email: string,
     registrationToken: string,

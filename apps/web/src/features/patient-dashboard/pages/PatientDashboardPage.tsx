@@ -1,5 +1,20 @@
 import { useEffect, useState } from 'react';
 import {
+  Activity,
+  ArrowUpRight,
+  Building2,
+  CalendarDays,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  KeyRound,
+  Pill,
+  ShieldCheck,
+  UserRound,
+  UsersRound,
+  type LucideIcon,
+} from 'lucide-react';
+import {
   approvePatientRelationshipRequest,
   declinePatientRelationshipRequest,
   getMyPatientDashboard,
@@ -8,6 +23,7 @@ import {
 } from '../api/patient-dashboard.api.js';
 import {
   acknowledgeMyQueueCall,
+  deleteMyNotification,
   deleteWebPushSubscription,
   getWebPushPublicKey,
   getMyNotifications,
@@ -16,6 +32,7 @@ import {
 } from '../../notifications/api/notifications.api.js';
 import { QueueCallAlert } from '../../notifications/components/QueueCallAlert.js';
 import { PatientNotificationBell } from '../../notifications/components/PatientNotificationBell.js';
+import { NotificationInboxPanel } from '../../notifications/components/NotificationInboxPanel.js';
 import { enableNotificationSound, playNotificationSound } from '../../notifications/utils/notification-sound.js';
 import type {
   PatientDashboardResponse,
@@ -23,6 +40,10 @@ import type {
   CareHistoryResponse,
   PatientRelationshipRequest,
 } from '../types/patient-dashboard.types.js';
+import {
+  getFamilyRelationships,
+  getFamilyRequests,
+} from '../../patient-family/api/patient-family.api.js';
 
 interface PatientDashboardPageProps {
   onNavigate: (path: string) => void;
@@ -49,6 +70,29 @@ const facilityTypeLabels: Record<string, string> = {
   INSURER: 'Insurer',
   EXTERNAL_PROVIDER: 'External Provider',
   OTHER_HEALTHCARE_PROVIDER: 'Healthcare Provider',
+};
+
+const unavailablePatientSections: Record<string, { title: string; detail: string }> = {
+  '/patient/appointments': {
+    title: 'Appointments',
+    detail: 'Appointment records are not connected to the patient account yet.',
+  },
+  '/patient/laboratory': {
+    title: 'Laboratory',
+    detail: 'Laboratory results are not connected to the patient account yet.',
+  },
+  '/patient/prescriptions': {
+    title: 'Prescriptions',
+    detail: 'Prescription records are not connected to the patient account yet.',
+  },
+  '/patient/documents': {
+    title: 'Documents',
+    detail: 'Patient documents are not connected to the patient account yet.',
+  },
+  '/patient/access': {
+    title: 'Data access',
+    detail: 'Data access activity is not connected to the patient account yet.',
+  },
 };
 
 function getFacilityType(type: string): string {
@@ -142,6 +186,136 @@ function RelationshipRequestCard({
   );
 }
 
+function PatientOverviewCard({
+  title,
+  metric,
+  summary,
+  path,
+  tone,
+  icon: Icon,
+  onNavigate,
+}: {
+  title: string;
+  metric: string;
+  summary: string;
+  path: string;
+  tone: string;
+  icon: LucideIcon;
+  onNavigate: (path: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`patient-overview-card patient-overview-card-${tone}`}
+      onClick={() => onNavigate(path)}
+    >
+      <span className="patient-overview-card-icon" aria-hidden="true">
+        <Icon size={21} strokeWidth={1.8} />
+      </span>
+      <span className="patient-overview-card-title">{title}</span>
+      <strong className="patient-overview-card-metric">{metric}</strong>
+      <span className="patient-overview-card-summary">{summary}</span>
+      <span className="patient-overview-card-action">
+        Open section <ArrowUpRight size={16} aria-hidden="true" />
+      </span>
+    </button>
+  );
+}
+
+const patientNavigationItems = [
+  { label: 'Overview', path: '/patient/dashboard', icon: 'OV' },
+  { label: 'Care journey', path: '/patient/journey', icon: 'CJ' },
+  { label: 'My profile', path: '/patient/profile', icon: 'PR' },
+  { label: 'Family', path: '/patient/family', icon: 'FM' },
+  { label: 'Facilities', path: '/patient/facilities', icon: 'FC' },
+  { label: 'Requests', path: '/patient/requests', icon: 'RQ' },
+  { label: 'Appointments', path: '/patient/appointments', icon: 'AP' },
+  { label: 'Care history', path: '/patient/encounters', icon: 'CH' },
+  { label: 'Laboratory', path: '/patient/laboratory', icon: 'LB' },
+  { label: 'Prescriptions', path: '/patient/prescriptions', icon: 'RX' },
+  { label: 'Documents', path: '/patient/documents', icon: 'DC' },
+  { label: 'Data access', path: '/patient/access', icon: 'DA' },
+] as const;
+
+function PatientSidebar({
+  collapsed,
+  currentPath,
+  patientName,
+  onToggle,
+  onNavigate,
+  onLogout,
+}: {
+  collapsed: boolean;
+  currentPath: string;
+  patientName: string;
+  onToggle: () => void;
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+}) {
+  const overviewActive =
+    currentPath === '/patient' || currentPath === '/patient/dashboard';
+
+  return (
+    <aside className={`patient-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className="patient-sidebar-brand">
+        <div className="patient-brand-mark">R</div>
+        <div className="patient-sidebar-brand-copy">
+          <strong>REVALTRIX</strong>
+          <span>Patient</span>
+        </div>
+        <button
+          type="button"
+          className="patient-sidebar-toggle"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={onToggle}
+        >
+          {collapsed ? '›' : '‹'}
+        </button>
+      </div>
+      <nav className="patient-sidebar-navigation" aria-label="Patient navigation">
+        {patientNavigationItems.map((item) => {
+          const active = item.path === '/patient/dashboard'
+            ? overviewActive
+            : currentPath === item.path;
+
+          return (
+            <button
+              type="button"
+              key={item.path}
+              title={item.label}
+              aria-label={item.label}
+              aria-current={active ? 'page' : undefined}
+              className={`patient-nav-item ${active ? 'active' : ''}`}
+              onClick={() => onNavigate(item.path)}
+            >
+              <span className="patient-nav-icon" aria-hidden="true">{item.icon}</span>
+              <span className="patient-nav-label">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="patient-sidebar-footer">
+        <div className="patient-user-summary">
+          <strong>{patientName}</strong>
+          <span>Revaltrix Patient</span>
+        </div>
+        <button
+          type="button"
+          className="patient-logout-button"
+          title="Sign out"
+          aria-label="Sign out"
+          onClick={onLogout}
+        >
+          <span className="patient-nav-icon" aria-hidden="true">↪</span>
+          <span className="patient-nav-label">Sign out</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 export function PatientDashboardPage({
   onNavigate,
   onLogout,
@@ -149,16 +323,16 @@ export function PatientDashboardPage({
   const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
   const isOverviewContent =
     currentPath === '/patient' || currentPath === '/patient/dashboard';
-  const isActivePath = (path: string) =>
-    path === '/patient/dashboard'
-      ? currentPath === '/patient' || currentPath === '/patient/dashboard'
-      : currentPath === path;
   const [dashboard, setDashboard] =
     useState<PatientDashboardResponse | null>(null);
   const [journey, setJourney] =
     useState<PatientJourneyResponse | null>(null);
   const [careHistory, setCareHistory] =
     useState<CareHistoryResponse | null>(null);
+  const [familySummary, setFamilySummary] = useState<{
+    activeRelationships: number;
+    pendingRequests: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -172,6 +346,11 @@ export function PatientDashboardPage({
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
+  const [showNotificationInbox, setShowNotificationInbox] = useState(false);
+  const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
+  const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
+  const [queueCallBusy, setQueueCallBusy] = useState(false);
+  const [queueCallError, setQueueCallError] = useState<string | null>(null);
   const [showQueueDetails, setShowQueueDetails] = useState(false);
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showCareHistory, setShowCareHistory] = useState(false);
@@ -230,6 +409,25 @@ export function PatientDashboardPage({
     }
   }
 
+  async function loadFamilySummary(): Promise<void> {
+    try {
+      const [relationships, requests] = await Promise.all([
+        getFamilyRelationships(),
+        getFamilyRequests(),
+      ]);
+      setFamilySummary({
+        activeRelationships: relationships.data.filter(
+          (relationship) => relationship.status === 'ACTIVE',
+        ).length,
+        pendingRequests: requests.data.filter(
+          (request) => request.status === 'PENDING',
+        ).length,
+      });
+    } catch {
+      setFamilySummary(null);
+    }
+  }
+
   async function loadNotifications(): Promise<void> {
     try {
       const nextNotifications = await getMyNotifications(false);
@@ -252,8 +450,11 @@ export function PatientDashboardPage({
       const response = await getMyPatientDashboard();
       setDashboard(response);
       if (loadRelatedContent) {
-        await loadJourney();
-        await loadCareHistory();
+        await Promise.all([
+          loadJourney(),
+          loadCareHistory(),
+          loadFamilySummary(),
+        ]);
       }
     } catch (requestError) {
       setError(
@@ -274,12 +475,15 @@ export function PatientDashboardPage({
 
     try {
       if (isOverviewContent) {
-        const [dashboardResponse, journeyResponse] = await Promise.all([
+        const [dashboardResponse, journeyResponse, careHistoryResponse] = await Promise.all([
           getMyPatientDashboard(),
           getMyPatientJourney(),
+          getMyCareHistory(),
         ]);
         setDashboard(dashboardResponse);
         setJourney(journeyResponse);
+        setCareHistory(careHistoryResponse);
+        await loadFamilySummary();
       } else if (currentPath === '/patient/encounters') {
         setCareHistory(await getMyCareHistory());
       }
@@ -464,21 +668,87 @@ export function PatientDashboardPage({
     const entryId = queueCallNotification.data?.queueEntryId;
 
     if (typeof entryId !== 'string') {
-      await markNotificationAsRead(queueCallNotification.id);
-      await loadNotifications();
+      setQueueCallError('This queue alert is missing its queue entry.');
       return;
     }
 
+    setQueueCallBusy(true);
+    setQueueCallError(null);
+
     try {
       await acknowledgeMyQueueCall(entryId);
-      await markNotificationAsRead(queueCallNotification.id);
+      const updatedNotification = await markNotificationAsRead(
+        queueCallNotification.id,
+      );
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.id === updatedNotification.id
+            ? updatedNotification
+            : notification,
+        ),
+      );
       await loadNotifications();
     } catch (requestError) {
-      setError(
+      const staleCallMessages = [
+        'Active queue call not found',
+        'There is no active queue call awaiting acknowledgement',
+        'Queue call was already acknowledged or is no longer active',
+      ];
+
+      if (
+        requestError instanceof Error &&
+        staleCallMessages.includes(requestError.message)
+      ) {
+        try {
+          const updatedNotification = await markNotificationAsRead(
+            queueCallNotification.id,
+          );
+          setNotifications((current) =>
+            current.map((notification) =>
+              notification.id === updatedNotification.id
+                ? updatedNotification
+                : notification,
+            ),
+          );
+          await loadNotifications();
+          setQueueCallError(null);
+        } catch (dismissError) {
+          setQueueCallError(
+            dismissError instanceof Error
+              ? dismissError.message
+              : 'The queue call is no longer active, but its notification could not be dismissed.',
+          );
+        }
+        return;
+      }
+
+      setQueueCallError(
         requestError instanceof Error
           ? requestError.message
           : 'Unable to acknowledge the queue call.',
       );
+    } finally {
+      setQueueCallBusy(false);
+    }
+  }
+
+  async function handleDeleteNotification(notificationId: string): Promise<void> {
+    setDeletingNotificationId(notificationId);
+    setNotificationActionError(null);
+
+    try {
+      await deleteMyNotification(notificationId);
+      setNotifications((current) =>
+        current.filter((notification) => notification.id !== notificationId),
+      );
+    } catch (requestError) {
+      setNotificationActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to delete this notification.',
+      );
+    } finally {
+      setDeletingNotificationId(null);
     }
   }
 
@@ -518,30 +788,48 @@ export function PatientDashboardPage({
     }
   }
 
-  if (loading) {
+  if (loading || !dashboard) {
     return (
-      <main className="patient-dashboard-loading">
-        <p>Loading your Revaltrix patient dashboard...</p>
-      </main>
-    );
-  }
-
-  if (!dashboard) {
-    return (
-      <main className="patient-dashboard-page">
-        <section className="patient-dashboard-error">
-          <p className="patient-dashboard-eyebrow">REVALTRIX</p>
-          <h1>Patient dashboard unavailable</h1>
-          <p>{error ?? 'Unable to load your patient account.'}</p>
-          <button
-            type="button"
-            className="patient-dashboard-button"
-            onClick={() => void loadDashboard()}
-          >
-            Try again
-          </button>
-        </section>
-      </main>
+      <div
+        className={`patient-app-shell ${sidebarCollapsed ? 'patient-sidebar-collapsed' : ''}`}
+      >
+        <PatientSidebar
+          collapsed={sidebarCollapsed}
+          currentPath={currentPath}
+          patientName={dashboard?.patient.displayName ?? 'Patient'}
+          onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+        />
+        <div className="patient-app-main">
+          <header className="patient-topbar">
+            <div>
+              <span className="patient-topbar-label">Your healthcare account</span>
+              <strong>{loading ? 'Loading patient account' : 'Dashboard unavailable'}</strong>
+            </div>
+          </header>
+          <main className="patient-app-content">
+            {loading ? (
+              <div className="patient-dashboard-loading" role="status" aria-live="polite">
+                <p>Loading your Revaltrix patient dashboard...</p>
+              </div>
+            ) : (
+              <section className="patient-dashboard-error">
+                <p className="patient-dashboard-eyebrow">REVALTRIX</p>
+                <h1>Patient dashboard unavailable</h1>
+                <p>{error ?? 'Unable to load your patient account.'}</p>
+                <button
+                  type="button"
+                  className="patient-dashboard-button"
+                  onClick={() => void loadDashboard()}
+                >
+                  Try again
+                </button>
+              </section>
+            )}
+          </main>
+        </div>
+      </div>
     );
   }
 
@@ -552,6 +840,8 @@ export function PatientDashboardPage({
       {queueCallNotification ? (
         <QueueCallAlert
           notification={queueCallNotification}
+          busy={queueCallBusy}
+          error={queueCallError}
           onAcknowledge={() => void handleQueueCallAcknowledge()}
         />
       ) : null}
@@ -576,147 +866,33 @@ export function PatientDashboardPage({
         </section>
       ) : null}
 
-      <aside
-        className={`patient-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}
-      >
-        <div className="patient-sidebar-brand">
-          <div className="patient-brand-mark">R</div>
-          <div className="patient-sidebar-brand-copy">
-            <strong>REVALTRIX</strong>
-            <span>Patient</span>
-          </div>
-          <button
-            type="button"
-            className="patient-sidebar-toggle"
-            aria-label={
-              sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
-            }
-            aria-expanded={!sidebarCollapsed}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          >
-            {sidebarCollapsed ? '›' : '‹'}
-          </button>
-        </div>
-
-        <nav
-          className="patient-sidebar-navigation"
-          aria-label="Patient navigation"
-        >
-          <button
-            type="button"
-            title="Overview"
-            aria-label="Overview"
-            className={`patient-nav-item ${isActivePath('/patient/dashboard') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/dashboard')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">OV</span>
-            <span className="patient-nav-label">Overview</span>
-          </button>
-
-          <button
-            type="button"
-            title="My profile"
-            aria-label="My profile"
-            className={`patient-nav-item ${isActivePath('/patient/profile') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/profile')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">PR</span>
-            <span className="patient-nav-label">My profile</span>
-          </button>
-
-          <button
-            type="button"
-            title="Appointments"
-            aria-label="Appointments"
-            className={`patient-nav-item ${isActivePath('/patient/appointments') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/appointments')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">AP</span>
-            <span className="patient-nav-label">Appointments</span>
-          </button>
-
-          <button
-            type="button"
-            title="Care history"
-            aria-label="Care history"
-            className={`patient-nav-item ${isActivePath('/patient/encounters') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/encounters')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">CH</span>
-            <span className="patient-nav-label">Care history</span>
-          </button>
-
-          <button
-            type="button"
-            title="Laboratory"
-            aria-label="Laboratory"
-            className={`patient-nav-item ${isActivePath('/patient/laboratory') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/laboratory')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">LB</span>
-            <span className="patient-nav-label">Laboratory</span>
-          </button>
-
-          <button
-            type="button"
-            title="Prescriptions"
-            aria-label="Prescriptions"
-            className={`patient-nav-item ${isActivePath('/patient/prescriptions') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/prescriptions')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">RX</span>
-            <span className="patient-nav-label">Prescriptions</span>
-          </button>
-
-          <button
-            type="button"
-            title="Documents"
-            aria-label="Documents"
-            className={`patient-nav-item ${isActivePath('/patient/documents') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/documents')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">DC</span>
-            <span className="patient-nav-label">Documents</span>
-          </button>
-
-          <button
-            type="button"
-            title="Data access"
-            aria-label="Data access"
-            className={`patient-nav-item ${isActivePath('/patient/access') ? 'active' : ''}`}
-            onClick={() => onNavigate('/patient/access')}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">DA</span>
-            <span className="patient-nav-label">Data access</span>
-          </button>
-        </nav>
-
-        <div className="patient-sidebar-footer">
-          <div className="patient-user-summary">
-            <strong>{dashboard.patient.displayName}</strong>
-            <span>Revaltrix Patient</span>
-          </div>
-
-          <button
-            type="button"
-            className="patient-logout-button"
-            title="Sign out"
-            aria-label="Sign out"
-            onClick={onLogout}
-          >
-            <span className="patient-nav-icon" aria-hidden="true">↪</span>
-            <span className="patient-nav-label">Sign out</span>
-          </button>
-        </div>
-      </aside>
+      <PatientSidebar
+        collapsed={sidebarCollapsed}
+        currentPath={currentPath}
+        patientName={dashboard.patient.displayName}
+        onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+      />
 
       <div className="patient-app-main">
       <div className="patient-dashboard-notification-controls">
         <PatientNotificationBell
           unreadCount={unreadCount}
-          onClick={() => void loadNotifications()}
+          expanded={showNotificationInbox}
+          onClick={() => {
+            setShowNotificationInbox((isOpen) => !isOpen);
+            void loadNotifications();
+          }}
         />
+        {showNotificationInbox ? (
+          <NotificationInboxPanel
+            notifications={notifications}
+            deletingNotificationId={deletingNotificationId}
+            error={notificationActionError}
+            onDelete={(notificationId) => void handleDeleteNotification(notificationId)}
+          />
+        ) : null}
 
         <button
           type="button"
@@ -754,6 +930,12 @@ export function PatientDashboardPage({
                 ? `Welcome, ${dashboard.patient.firstName}`
                 : currentPath === '/patient/encounters'
                   ? 'Care history'
+                  : currentPath === '/patient/journey'
+                    ? 'Care journey'
+                    : currentPath === '/patient/facilities'
+                      ? 'Facilities'
+                      : currentPath === '/patient/requests'
+                        ? 'Facility requests'
                   : currentPath === '/patient/appointments'
                     ? 'Appointments'
                     : currentPath === '/patient/laboratory'
@@ -794,19 +976,13 @@ export function PatientDashboardPage({
           ) : null}
 
           {isOverviewContent ? (
-          <>
+          <div className="patient-dashboard-overview">
           <section className="patient-dashboard-hero">
             <div>
-              <p className="patient-dashboard-eyebrow">
-                Your healthcare identity
-              </p>
-              <h1>
-                Your healthcare, connected securely.
-              </h1>
+              <p className="patient-dashboard-eyebrow">PATIENT OVERVIEW</p>
+              <h1>Welcome back, {dashboard.patient.firstName}</h1>
               <p>
-                Your Revaltrix patient identity stays with you while
-                each healthcare facility maintains its own relationship
-                with you.
+                A current summary of your care, records, and healthcare connections.
               </p>
             </div>
 
@@ -1456,36 +1632,125 @@ export function PatientDashboardPage({
           ) : null}
 
 
-      <section className="patient-dashboard-grid">
-            <article className="patient-dashboard-card">
-              <p className="patient-dashboard-eyebrow">
-                Profile
-              </p>
-              <h2>{dashboard.patient.displayName}</h2>
-              <p>{dashboard.patient.location ?? 'Location not provided'}</p>
-
-              <div className="patient-dashboard-meta">
-                {dashboard.identities.map((identity) => (
-                  <span key={identity.type}>
-                    {identity.type}
-                    {' · '}
-                    {identity.verified ? 'Verified' : 'Not verified'}
-                  </span>
-                ))}
-              </div>
-            </article>
-
-            <article className="patient-dashboard-card">
-              <p className="patient-dashboard-eyebrow">
-                Your facilities
-              </p>
-              <h2>{dashboard.facilities.length}</h2>
-              <p>
-                Healthcare facilities with a relationship to your
-                Revaltrix patient identity.
-              </p>
-            </article>
-          </section>
+      <section className="patient-overview-cards" aria-label="Patient summaries">
+        <PatientOverviewCard
+          title="My profile"
+          metric={`${dashboard.identities.filter((identity) => identity.verified).length} verified`}
+          summary={`${dashboard.patient.displayName}${dashboard.patient.location ? ` · ${dashboard.patient.location}` : ''}`}
+          path="/patient/profile"
+          tone="mint"
+          icon={UserRound}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Care journey"
+          metric={journey ? String(activeJourneys.length) : '—'}
+          summary={
+            currentJourney?.current
+              ? `${currentJourney.current.department?.name ?? currentJourney.current.name} · ${currentJourney.current.queueEntry?.status?.replaceAll('_', ' ') ?? currentJourney.current.status.replaceAll('_', ' ')}`
+              : journey
+                ? 'No active care journey'
+                : 'Journey summary unavailable'
+          }
+          path="/patient/journey"
+          tone="blue"
+          icon={Activity}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Care history"
+          metric={careHistory ? String(careHistory.data.length) : '—'}
+          summary={
+            careHistory
+              ? `${careHistory.data.reduce((total, visit) => total + visit.clinicalNotes.length, 0)} clinical notes across recorded visits`
+              : 'Care history summary unavailable'
+          }
+          path="/patient/encounters"
+          tone="rose"
+          icon={ClipboardList}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Family"
+          metric={familySummary ? String(familySummary.activeRelationships) : '—'}
+          summary={
+            familySummary
+              ? `${familySummary.pendingRequests} pending family requests`
+              : 'Family summary unavailable'
+          }
+          path="/patient/family"
+          tone="violet"
+          icon={UsersRound}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Facilities"
+          metric={String(dashboard.facilities.length)}
+          summary={`${dashboard.facilities.filter((facility) => facility.relationshipStatus === 'ACTIVE').length} active relationships`}
+          path="/patient/facilities"
+          tone="amber"
+          icon={Building2}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Requests"
+          metric={String(dashboard.pendingRelationshipRequests.length)}
+          summary={
+            dashboard.pendingRelationshipRequests.length
+              ? 'Facility requests need your review'
+              : 'No facility requests need your review'
+          }
+          path="/patient/requests"
+          tone="teal"
+          icon={ShieldCheck}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Appointments"
+          metric="Not connected"
+          summary="Appointment records are not connected yet"
+          path="/patient/appointments"
+          tone="coral"
+          icon={CalendarDays}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Laboratory"
+          metric="Not connected"
+          summary="Laboratory results are not connected yet"
+          path="/patient/laboratory"
+          tone="cyan"
+          icon={FlaskConical}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Prescriptions"
+          metric="Not connected"
+          summary="Prescription records are not connected yet"
+          path="/patient/prescriptions"
+          tone="yellow"
+          icon={Pill}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Documents"
+          metric="Not connected"
+          summary="Patient documents are not connected yet"
+          path="/patient/documents"
+          tone="slate"
+          icon={FileText}
+          onNavigate={onNavigate}
+        />
+        <PatientOverviewCard
+          title="Data access"
+          metric="Not connected"
+          summary="Access activity is not connected yet"
+          path="/patient/access"
+          tone="green"
+          icon={KeyRound}
+          onNavigate={onNavigate}
+        />
+      </section>
 
           {dashboard.pendingRelationshipRequests.length > 0 ? (
             <section className="patient-dashboard-section">
@@ -1566,7 +1831,7 @@ export function PatientDashboardPage({
               </div>
             )}
           </section>
-          </>
+          </div>
           ) : currentPath === '/patient/encounters' ? (
             <section className="patient-dashboard-section patient-patient-content-panel">
               <div className="patient-dashboard-section-header">
@@ -1591,23 +1856,83 @@ export function PatientDashboardPage({
                           {visit.status.replaceAll('_', ' ')}
                         </span>
                       </div>
-                      {visit.departments.length ? (
-                        <ul>
-                          {visit.departments.map((department, departmentIndex) => (
-                            <li key={`${department.name}-${departmentIndex}`}>
-                              <strong>{department.name}</strong>
-                              {department.care.length ? (
-                                <span>
-                                  {' '}· {department.care.length} care record
-                                  {department.care.length === 1 ? '' : 's'}
-                                </span>
-                              ) : null}
-                            </li>
+                      <div className="patient-history-overview">
+                        <div>
+                          <span>Facility</span>
+                          <strong>{visit.facility.name}</strong>
+                        </div>
+                        <div>
+                          <span>Visit date</span>
+                          <strong>{new Date(visit.date).toLocaleString()}</strong>
+                        </div>
+                      </div>
+                      {visit.clinicalNotes.length ? (
+                        <section className="patient-history-clinical-section">
+                          <h2>Clinical notes</h2>
+                          {visit.clinicalNotes.map((note, noteIndex) => (
+                            <article
+                              className="patient-history-clinical-note"
+                              key={`${note.type}-${note.createdAt}-${noteIndex}`}
+                            >
+                              <strong>{note.type.replaceAll('_', ' ')}</strong>
+                              {note.chiefComplaint ? <p><b>Reason for visit:</b> {note.chiefComplaint}</p> : null}
+                              {note.subjective ? <p><b>Reported:</b> {note.subjective}</p> : null}
+                              {note.objective ? <p><b>Findings:</b> {note.objective}</p> : null}
+                              {note.assessment ? <p><b>Assessment:</b> {note.assessment}</p> : null}
+                              {note.plan ? <p><b>Plan:</b> {note.plan}</p> : null}
+                            </article>
                           ))}
-                        </ul>
-                      ) : (
-                        <p>No department details are available for this visit.</p>
-                      )}
+                        </section>
+                      ) : null}
+                      {visit.departments.length ? (
+                        <section className="patient-history-departments">
+                          <h2>Care received</h2>
+                          {visit.departments.map((department, departmentIndex) => (
+                            <article
+                              className="patient-history-step"
+                              key={`${department.sequence}-${department.name}-${departmentIndex}`}
+                            >
+                              <div className="patient-history-step-header">
+                                <div>
+                                  <strong>{department.department?.name ?? department.name}</strong>
+                                  <span>{department.branch?.name ?? department.location ?? 'Location not provided'}</span>
+                                </div>
+                                <b>{department.status.replaceAll('_', ' ')}</b>
+                              </div>
+                              {department.description ? <p>{department.description}</p> : null}
+                              {department.instruction ? <p><b>Instructions:</b> {department.instruction}</p> : null}
+                              {department.care.map((record, recordIndex) => (
+                                <div className="patient-history-care-record" key={`${record.recordedAt}-${recordIndex}`}>
+                                  <span>{new Date(record.recordedAt).toLocaleString()}</span>
+                                  {record.note ? <p>{record.note}</p> : null}
+                                  {record.procedures ? <p><b>Services / procedures:</b> {record.procedures}</p> : null}
+                                  {record.attachments.length ? (
+                                    <div className="patient-history-attachments">
+                                      {record.attachments.map((attachment) => (
+                                        <span className="patient-history-attachment" key={attachment.id}>
+                                          {attachment.fileName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </article>
+                          ))}
+                        </section>
+                      ) : null}
+                      {visit.referrals.length ? (
+                        <section className="patient-history-referrals">
+                          <h2>Referrals</h2>
+                          {visit.referrals.map((referral, referralIndex) => (
+                            <article key={`${referral.createdAt}-${referralIndex}`}>
+                              <strong>{referral.fromDepartment ?? 'Care team'}{referral.toDepartment ? ` to ${referral.toDepartment}` : ''}</strong>
+                              {referral.reason ? <p>{referral.reason}</p> : null}
+                              {referral.instruction ? <p>{referral.instruction}</p> : null}
+                            </article>
+                          ))}
+                        </section>
+                      ) : null}
                     </article>
                   ))}
                 </div>
@@ -1618,29 +1943,101 @@ export function PatientDashboardPage({
                 </div>
               )}
             </section>
+          ) : currentPath === '/patient/journey' ? (
+            <section className="patient-dashboard-section patient-patient-content-panel">
+              <div className="patient-dashboard-section-header">
+                <div>
+                  <p className="patient-dashboard-eyebrow">YOUR CARE PATH</p>
+                  <h1>Care journey</h1>
+                </div>
+              </div>
+              {journey?.data.length ? (
+                <div className="patient-journey-record-list">
+                  {journey.data.map((item) => (
+                    <article className="patient-journey-record" key={item.journey.id}>
+                      <header>
+                        <div>
+                          <strong>{item.current?.department?.name ?? item.current?.name ?? 'Care journey'}</strong>
+                          <span>Started {new Date(item.journey.startedAt).toLocaleString()}</span>
+                        </div>
+                        <b>{item.journey.status.replaceAll('_', ' ')}</b>
+                      </header>
+                      <div className="patient-journey-timeline">
+                        {item.steps.map((step) => (
+                          <div className={`patient-journey-timeline-item ${step.id === item.current?.id ? 'current' : ''}`} key={step.id}>
+                            <div className="patient-journey-timeline-marker">{step.status === 'COMPLETED' ? '✓' : '•'}</div>
+                            <div>
+                              <strong>{step.department?.name ?? step.name}</strong>
+                              <span>{step.status.replaceAll('_', ' ')}</span>
+                              {step.location ? <p>{step.location}</p> : null}
+                              {step.instruction ? <p>{step.instruction}</p> : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="patient-dashboard-empty"><h2>No care journeys yet</h2><p>Active and completed care journeys will appear here.</p></div>
+              )}
+            </section>
+          ) : currentPath === '/patient/facilities' ? (
+            <section className="patient-dashboard-section patient-patient-content-panel">
+              <div className="patient-dashboard-section-header">
+                <div><p className="patient-dashboard-eyebrow">CONNECTED CARE</p><h1>Your facilities</h1></div>
+                <span className="patient-dashboard-count">{dashboard.facilities.length}</span>
+              </div>
+              {dashboard.facilities.length ? (
+                <div className="patient-dashboard-facility-list">
+                  {dashboard.facilities.map((facility) => (
+                    <article className="patient-dashboard-facility-card" key={facility.patientRecordId}>
+                      <div>
+                        <p className="patient-dashboard-eyebrow">{getFacilityType(facility.facility.type)}</p>
+                        <h2>{facility.facility.name}</h2>
+                        {facility.facility.legalName && facility.facility.legalName !== facility.facility.name ? <p>{facility.facility.legalName}</p> : null}
+                      </div>
+                      <div className="patient-dashboard-facility-meta">
+                        <span>Patient number: {facility.patientNumber}</span>
+                        <span>{getRelationshipLabel(facility.relationshipStatus)}</span>
+                        <span>Connected {new Date(facility.registeredAt).toLocaleDateString()}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="patient-dashboard-empty"><h2>No facilities connected</h2><p>Connected healthcare facilities will appear here.</p></div>
+              )}
+            </section>
+          ) : currentPath === '/patient/requests' ? (
+            <section className="patient-dashboard-section patient-patient-content-panel">
+              <div className="patient-dashboard-section-header">
+                <div><p className="patient-dashboard-eyebrow">ACTION REQUIRED</p><h1>Facility requests</h1></div>
+                <span className="patient-dashboard-count">{dashboard.pendingRelationshipRequests.length}</span>
+              </div>
+              {dashboard.pendingRelationshipRequests.length ? (
+                <div className="patient-dashboard-request-list">
+                  {dashboard.pendingRelationshipRequests.map((request) => (
+                    <RelationshipRequestCard
+                      key={request.id}
+                      request={request}
+                      busyRequestId={busyRequestId}
+                      onApprove={(id) => void handleApprove(id)}
+                      onDecline={(id) => void handleDecline(id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="patient-dashboard-empty"><h2>No facility requests</h2><p>New requests from healthcare facilities will appear here.</p></div>
+              )}
+            </section>
           ) : (
             <section className="patient-dashboard-section patient-patient-content-panel">
               <p className="patient-dashboard-eyebrow">PATIENT ACCOUNT</p>
-              <h1>
-                {currentPath === '/patient/appointments'
-                  ? 'Appointments'
-                  : currentPath === '/patient/laboratory'
-                    ? 'Laboratory'
-                    : currentPath === '/patient/prescriptions'
-                      ? 'Prescriptions'
-                      : currentPath === '/patient/documents'
-                        ? 'Documents'
-                        : currentPath === '/patient/access'
-                          ? 'Data access'
-                          : 'Patient section'}
-              </h1>
+              <h1>{unavailablePatientSections[currentPath]?.title ?? 'Patient section'}</h1>
               <div className="patient-dashboard-empty">
-                <h2>This section is not available yet</h2>
-                <p>
-                  This area will display your information here when the
-                  corresponding patient service is available. Your other
-                  dashboard sections remain accessible from the menu.
-                </p>
+                <h2>Patient service not connected</h2>
+                <p>{unavailablePatientSections[currentPath]?.detail ?? 'This patient section is not available yet.'}</p>
               </div>
             </section>
           )}

@@ -19,10 +19,17 @@ export enum PatientFamilyRelationshipTypeDto {
 }
 
 export class CreateFamilyRelationshipRequestDto {
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(50)
-  targetPlatformPatientId!: string;
+  targetPlatformPatientId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(320)
+  targetIdentifier?: string;
 
   @IsEnum(PatientFamilyRelationshipTypeDto)
   relationshipType!: PatientFamilyRelationshipTypeDto;

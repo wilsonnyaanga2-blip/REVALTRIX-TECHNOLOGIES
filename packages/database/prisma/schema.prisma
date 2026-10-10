@@ -402,6 +402,8 @@ model User {
   patientRelationshipRequestsHandled PatientTenantRelationshipRequest[] @relation("PatientRelationshipRequestResponder")
   familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestCreator")
   familyRelationshipRequestsHandled  PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequestResponder")
+  familyRelationshipsRequested       PatientFamilyRelationship[]        @relation("FamilyRelationshipRequesterUser")
+  familyRelationshipsApproved        PatientFamilyRelationship[]        @relation("FamilyRelationshipApproverUser")
   familyRelationshipsCreated         PatientFamilyRelationship[]        @relation("FamilyRelationshipCreator")
   familyRelationshipsRevoked         PatientFamilyRelationship[]        @relation("FamilyRelationshipRevoker")
   patientJourneyHandoffsInitiated    PatientJourneyHandoff[]            @relation("PatientJourneyHandoffInitiator")
@@ -412,6 +414,11 @@ model User {
   guardianVerificationDocumentsUploaded PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentUploader")
   guardianVerificationDocumentsReviewed PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentReviewer")
   dependentRegistrationsCreated         PatientDependentRegistration[]        @relation("DependentRegistrationCreator")
+  dependentRegistrationsReviewed        PatientDependentRegistration[]        @relation("DependentRegistrationReviewer")
+  familyAccessGrantsCreated             FamilyAccessGrant[]                   @relation("FamilyAccessGrantCreator")
+  familyAccessGrantsRevoked             FamilyAccessGrant[]                   @relation("FamilyAccessGrantRevoker")
+  familyVerificationDocumentsUploaded   FamilyVerificationDocument[]          @relation("FamilyVerificationDocumentUploader")
+  familyVerificationDocumentsReviewed   FamilyVerificationDocument[]          @relation("FamilyVerificationDocumentReviewer")
 
   clinicalNotesAuthored       ClinicalNote[]        @relation("ClinicalNoteAuthor")
   clinicalNoteVersionsCreated ClinicalNoteVersion[] @relation("ClinicalNoteVersionCreator")
@@ -437,7 +444,7 @@ model User {
   queueCareRecordsAuthored        QueueCareRecord[]         @relation("QueueCareRecordAuthor")
   queueCareAttachmentsUploaded    QueueCareAttachment[]     @relation("QueueCareAttachmentUploader")
 
-  notifications Notification[]
+  notifications        Notification[]
   webPushSubscriptions WebPushSubscription[]
 
   @@index([status])
@@ -1413,9 +1420,20 @@ enum PatientGuardianVerificationStatus {
 }
 
 enum PatientDependentRegistrationStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
   ACTIVE
   SUSPENDED
   REVOKED
+}
+
+enum FamilyRelationshipVerificationStatus {
+  UNVERIFIED
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
 }
 
 enum PatientGuardianVerificationDocumentType {
@@ -1429,6 +1447,50 @@ enum PatientGuardianVerificationDocumentStatus {
   VERIFIED
   REJECTED
   REPLACED
+}
+
+enum FamilyAccessGrantStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum FamilyAccessAuditAction {
+  VIEW
+  DOWNLOAD
+  CREATE
+  UPDATE
+  CANCEL
+  LOGIN_ATTEMPT
+  ACCESS_DENIED
+}
+
+enum FamilyAccessResourceType {
+  PROFILE
+  APPOINTMENTS
+  REMINDERS
+  DOCUMENTS
+  LAB_RESULTS
+  PRESCRIPTIONS
+  BILLING
+  MESSAGES
+}
+
+enum FamilyVerificationDocumentType {
+  BIRTH_CERTIFICATE
+  NATIONAL_ID
+  PASSPORT
+  GUARDIANSHIP_ORDER
+  SCHOOL_ID
+  IMMUNIZATION_CARD
+  OTHER
+}
+
+enum FamilyVerificationDocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 model PatientProfile {
@@ -1455,14 +1517,19 @@ model PatientProfile {
   familyRelationshipsReceived        PatientFamilyRelationship[]        @relation("FamilyRelationshipRelated")
   familyRelationshipRequestsMade     PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipRequester")
   familyRelationshipRequestsReceived PatientFamilyRelationshipRequest[] @relation("FamilyRelationshipTarget")
+  familyAccessGrantsAsPatient        FamilyAccessGrant[]                @relation("FamilyAccessGrantPatient")
+  familyAccessGrantsAsDelegate       FamilyAccessGrant[]                @relation("FamilyAccessGrantDelegate")
+  familyVerificationDocuments        FamilyVerificationDocument[]       @relation("FamilyVerificationDocumentOwner")
 
   guardianAuthoritiesGranted               PatientGuardianAuthority[]            @relation("GuardianAuthorityGuardian")
   guardianAuthoritiesReceived              PatientGuardianAuthority[]            @relation("GuardianAuthorityDependent")
   guardianVerificationDocumentsAsGuardian  PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentGuardian")
   guardianVerificationDocumentsAsDependent PatientGuardianVerificationDocument[] @relation("GuardianVerificationDocumentDependent")
 
-  dependentRegistration         PatientDependentRegistration?  @relation("DependentRegistrationDependent")
-  dependentRegistrationsCreated PatientDependentRegistration[] @relation("DependentRegistrationRegistrar")
+  dependentRegistration             PatientDependentRegistration?  @relation("DependentRegistrationDependent")
+  dependentRegistrationsCreated     PatientDependentRegistration[] @relation("DependentRegistrationRegistrar")
+  familyAccessAuditEventsAsPatient  FamilyAccessAuditLog[]         @relation("FamilyAccessAuditPatient")
+  familyAccessAuditEventsAsDelegate FamilyAccessAuditLog[]         @relation("FamilyAccessAuditDelegate")
 
   contact           PatientContact?
   emergencyContacts EmergencyContact[]
@@ -1562,17 +1629,107 @@ model PatientDependentRegistration {
   registeredByUserId           String                             @db.Uuid
   relationshipType             PatientFamilyRelationshipType
   status                       PatientDependentRegistrationStatus @default(ACTIVE)
+  birthCertificateUrl          String?                            @db.VarChar(1000)
+  guardianIdDocumentUrl        String?                            @db.VarChar(1000)
+  additionalProofUrl           String?                            @db.VarChar(1000)
+  verificationNotes            String?                            @db.VarChar(2000)
+  reviewedByUserId             String?                            @db.Uuid
+  reviewedAt                   DateTime?                          @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  dependentPatientProfile    PatientProfile @relation("DependentRegistrationDependent", fields: [dependentPatientProfileId], references: [id], onDelete: Restrict)
-  registeredByPatientProfile PatientProfile @relation("DependentRegistrationRegistrar", fields: [registeredByPatientProfileId], references: [id], onDelete: Restrict)
-  registeredByUser           User           @relation("DependentRegistrationCreator", fields: [registeredByUserId], references: [id], onDelete: Restrict)
+  dependentPatientProfile    PatientProfile               @relation("DependentRegistrationDependent", fields: [dependentPatientProfileId], references: [id], onDelete: Restrict)
+  registeredByPatientProfile PatientProfile               @relation("DependentRegistrationRegistrar", fields: [registeredByPatientProfileId], references: [id], onDelete: Restrict)
+  registeredByUser           User                         @relation("DependentRegistrationCreator", fields: [registeredByUserId], references: [id], onDelete: Restrict)
+  reviewedByUser             User?                        @relation("DependentRegistrationReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  verificationDocuments      FamilyVerificationDocument[]
 
   @@index([registeredByPatientProfileId, status])
   @@index([registeredByUserId, createdAt])
   @@map("patient_dependent_registrations")
+}
+
+model FamilyAccessGrant {
+  id             String                  @id @default(uuid()) @db.Uuid
+  patientId      String                  @db.Uuid
+  delegateId     String                  @db.Uuid
+  relationshipId String?                 @db.Uuid
+  permissions    Json
+  status         FamilyAccessGrantStatus @default(ACTIVE)
+  grantedById    String                  @db.Uuid
+  expiresAt      DateTime                @db.Timestamptz(6)
+  reviewedAt     DateTime?               @db.Timestamptz(6)
+  revokedAt      DateTime?               @db.Timestamptz(6)
+  revokedById    String?                 @db.Uuid
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                @updatedAt @db.Timestamptz(6)
+
+  patient      PatientProfile             @relation("FamilyAccessGrantPatient", fields: [patientId], references: [id], onDelete: Restrict)
+  delegate     PatientProfile             @relation("FamilyAccessGrantDelegate", fields: [delegateId], references: [id], onDelete: Restrict)
+  relationship PatientFamilyRelationship? @relation(fields: [relationshipId], references: [id], onDelete: Restrict)
+  grantedBy    User                       @relation("FamilyAccessGrantCreator", fields: [grantedById], references: [id], onDelete: Restrict)
+  revokedBy    User?                      @relation("FamilyAccessGrantRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+  auditLogs    FamilyAccessAuditLog[]
+
+  @@index([patientId, status, expiresAt])
+  @@index([delegateId, status, expiresAt])
+  @@index([relationshipId])
+  @@index([grantedById, createdAt])
+  @@map("family_access_grants")
+}
+
+model FamilyAccessAuditLog {
+  id            String                   @id @default(uuid()) @db.Uuid
+  accessGrantId String?                  @db.Uuid
+  patientId     String                   @db.Uuid
+  delegateId    String                   @db.Uuid
+  action        FamilyAccessAuditAction
+  resourceType  FamilyAccessResourceType
+  resourceId    String?                  @db.VarChar(100)
+  ipAddress     String?                  @db.VarChar(64)
+  userAgent     String?                  @db.VarChar(500)
+  metadata      Json?
+  createdAt     DateTime                 @default(now()) @db.Timestamptz(6)
+
+  accessGrant FamilyAccessGrant? @relation(fields: [accessGrantId], references: [id], onDelete: Restrict)
+  patient     PatientProfile     @relation("FamilyAccessAuditPatient", fields: [patientId], references: [id], onDelete: Restrict)
+  delegate    PatientProfile     @relation("FamilyAccessAuditDelegate", fields: [delegateId], references: [id], onDelete: Restrict)
+
+  @@index([patientId, createdAt])
+  @@index([delegateId, createdAt])
+  @@index([accessGrantId, createdAt])
+  @@index([action, createdAt])
+  @@map("family_access_audit_logs")
+}
+
+model FamilyVerificationDocument {
+  id                      String                           @id @default(uuid()) @db.Uuid
+  ownerId                 String                           @db.Uuid
+  uploadedById            String                           @db.Uuid
+  documentType            FamilyVerificationDocumentType
+  storageKey              String                           @unique @db.VarChar(1000)
+  fileName                String                           @db.VarChar(255)
+  mimeType                String                           @db.VarChar(150)
+  fileSize                BigInt
+  status                  FamilyVerificationDocumentStatus @default(PENDING)
+  reviewedById            String?                          @db.Uuid
+  reviewedAt              DateTime?                        @db.Timestamptz(6)
+  rejectionReason         String?                          @db.VarChar(1000)
+  dependentRegistrationId String?                          @db.Uuid
+  createdAt               DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                         @updatedAt @db.Timestamptz(6)
+
+  owner                 PatientProfile                @relation("FamilyVerificationDocumentOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  uploadedBy            User                          @relation("FamilyVerificationDocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  reviewedBy            User?                         @relation("FamilyVerificationDocumentReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  dependentRegistration PatientDependentRegistration? @relation(fields: [dependentRegistrationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, status, createdAt])
+  @@index([uploadedById, createdAt])
+  @@index([status, createdAt])
+  @@index([dependentRegistrationId])
+  @@map("family_verification_documents")
 }
 
 model PatientContact {
@@ -1856,17 +2013,24 @@ model PatientFamilyRelationship {
   relationshipType        PatientFamilyRelationshipType
   status                  PatientFamilyRelationshipStatus @default(PENDING)
 
-  createdByUserId String  @db.Uuid
-  revokedByUserId String? @db.Uuid
+  createdByUserId       String                               @db.Uuid
+  revokedByUserId       String?                              @db.Uuid
+  requestedById         String?                              @db.Uuid
+  approvedById          String?                              @db.Uuid
+  verificationStatus    FamilyRelationshipVerificationStatus @default(UNVERIFIED)
+  verificationDocuments Json?
 
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   revokedAt DateTime? @db.Timestamptz(6)
 
-  patientProfile        PatientProfile @relation("FamilyRelationshipSubject", fields: [patientProfileId], references: [id], onDelete: Restrict)
-  relatedPatientProfile PatientProfile @relation("FamilyRelationshipRelated", fields: [relatedPatientProfileId], references: [id], onDelete: Restrict)
-  createdByUser         User           @relation("FamilyRelationshipCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  revokedByUser         User?          @relation("FamilyRelationshipRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+  patientProfile        PatientProfile      @relation("FamilyRelationshipSubject", fields: [patientProfileId], references: [id], onDelete: Restrict)
+  relatedPatientProfile PatientProfile      @relation("FamilyRelationshipRelated", fields: [relatedPatientProfileId], references: [id], onDelete: Restrict)
+  createdByUser         User                @relation("FamilyRelationshipCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revokedByUser         User?               @relation("FamilyRelationshipRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+  requestedByUser       User?               @relation("FamilyRelationshipRequesterUser", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedByUser        User?               @relation("FamilyRelationshipApproverUser", fields: [approvedById], references: [id], onDelete: Restrict)
+  accessGrants          FamilyAccessGrant[]
 
   @@index([patientProfileId, status, relationshipType])
   @@index([relatedPatientProfileId, status, relationshipType])
@@ -2101,6 +2265,7 @@ enum VerificationChannel {
 enum VerificationPurpose {
   REGISTRATION
   PASSWORD_RESET
+  FAMILY_ACCESS
 }
 
 model VerificationChallenge {

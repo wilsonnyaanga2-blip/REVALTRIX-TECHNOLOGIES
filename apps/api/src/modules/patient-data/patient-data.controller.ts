@@ -11,6 +11,8 @@ import type { AuthenticatedRequest } from '../core/authentication/guards/access-
 import { AccessTokenGuard } from '../core/authentication/guards/access-token.guard.js';
 import { PatientDataService } from './patient-data.service.js';
 import { UpsertPatientContactDto } from './dto/upsert-patient-contact.dto.js';
+import { FamilyStepUpGuard } from '../patient-family/family-step-up.guard.js';
+import { RequireFamilyStepUp } from '../patient-family/require-family-step-up.decorator.js';
 
 @Controller('v1/patient-data')
 @UseGuards(AccessTokenGuard)
@@ -29,6 +31,8 @@ export class PatientDataController {
   }
 
   @Put('contact')
+  @UseGuards(FamilyStepUpGuard)
+  @RequireFamilyStepUp()
   async upsertMyContact(
     @Req() request: AuthenticatedRequest,
     @Body() dto: UpsertPatientContactDto,
@@ -40,6 +44,8 @@ export class PatientDataController {
   }
 
   @Delete('contact')
+  @UseGuards(FamilyStepUpGuard)
+  @RequireFamilyStepUp()
   async deleteMyContact(
     @Req() request: AuthenticatedRequest,
   ) {

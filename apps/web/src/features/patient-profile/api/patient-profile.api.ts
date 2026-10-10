@@ -1,4 +1,5 @@
 import { authenticatedApiRequest } from '../../../lib/auth-api.js';
+import { requestStepUpChallengeId } from '../../../lib/step-up.js';
 import type {
   PatientAddress,
   PatientContact,
@@ -20,17 +21,23 @@ export async function getPatientContact(): Promise<PatientContact | null> {
 export async function savePatientContact(
   payload: Record<string, unknown>,
 ): Promise<PatientContact> {
+  const stepUpChallengeId = await requestStepUpChallengeId();
   const response = await authenticatedApiRequest<{
     data: PatientContact;
   }>(`${base}/contact`, {
     method: 'PUT',
     body: JSON.stringify(payload),
+    headers: { 'x-step-up-challenge-id': stepUpChallengeId },
   });
   return response.data;
 }
 
 export async function deletePatientContact(): Promise<void> {
-  await authenticatedApiRequest(`${base}/contact`, { method: 'DELETE' });
+  const stepUpChallengeId = await requestStepUpChallengeId();
+  await authenticatedApiRequest(`${base}/contact`, {
+    method: 'DELETE',
+    headers: { 'x-step-up-challenge-id': stepUpChallengeId },
+  });
 }
 
 export const getPatientAddresses = () =>

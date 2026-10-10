@@ -54,6 +54,17 @@ export async function markNotificationAsRead(
   return response.data;
 }
 
+export async function deleteMyNotification(
+  notificationId: string,
+): Promise<void> {
+  await authenticatedApiRequest(
+    `/v1/notifications/${encodeURIComponent(notificationId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
 export async function acknowledgeMyQueueCall(
   entryId: string,
 ): Promise<void> {

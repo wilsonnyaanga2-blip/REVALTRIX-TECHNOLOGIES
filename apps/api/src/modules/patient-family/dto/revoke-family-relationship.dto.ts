@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsOptional,
   IsString,
   MaxLength,
@@ -9,4 +10,8 @@ export class RevokeFamilyRelationshipDto {
   @IsString()
   @MaxLength(500)
   reason?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  revokeActiveAccessGrants?: boolean;
 }

@@ -12,9 +12,10 @@ import { PatientInsurancesService } from './patient-insurances.service.js';
 import { AuthenticationModule } from '../core/authentication/authentication.module.js';
 import { PatientCorporateProfileController } from './patient-corporate-profile.controller.js';
 import { PatientCorporateProfileService } from './patient-corporate-profile.service.js';
+import { PatientFamilyModule } from '../patient-family/patient-family.module.js';
 
 @Module({
-  imports: [AuthenticationModule],
+  imports: [AuthenticationModule, PatientFamilyModule],
   controllers: [PatientCorporateProfileController, PatientDataController, EmergencyContactsController, NextOfKinController, PatientAddressesController, PatientInsurancesController],
   providers: [PatientCorporateProfileService, PatientDataService, EmergencyContactsService, NextOfKinService, PatientAddressesService, PatientInsurancesService],
   exports: [PatientDataService],

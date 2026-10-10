@@ -1,16 +1,20 @@
 interface PatientNotificationBellProps {
   unreadCount: number;
+  expanded: boolean;
   onClick: () => void;
 }
 
 export function PatientNotificationBell({
   unreadCount,
+  expanded,
   onClick,
 }: PatientNotificationBellProps) {
   return (
     <button
       type="button"
       className="patient-notification-bell"
+      aria-controls="patient-notification-inbox"
+      aria-expanded={expanded}
       aria-label={
         unreadCount > 0
           ? `${unreadCount} unread notifications`

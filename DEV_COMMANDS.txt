@@ -3,3 +3,5 @@ git add . && git commit -m "update full system" && git push origin main
 cd /workspaces/REVALTRIX-TECHNOLOGIES && pnpm --filter @revaltrix/web dev --host 0.0.0.0
 
 cd /workspaces/REVALTRIX-TECHNOLOGIES && pnpm --filter @revaltrix/api dev
+
+pnpm --filter @revaltrix/database generate

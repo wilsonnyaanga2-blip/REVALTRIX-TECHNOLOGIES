@@ -64,7 +64,9 @@ export class PatientFamilyService {
               relatedPatientProfileId: patientProfileId,
             },
           ],
-          status: 'ACTIVE',
+          status: {
+            in: ['ACTIVE', 'REVOKED'],
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -83,6 +85,7 @@ export class PatientFamilyService {
               platformPatientId: true,
               firstName: true,
               secondName: true,
+              dateOfBirth: true,
             },
           },
           relatedPatientProfile: {
@@ -91,6 +94,7 @@ export class PatientFamilyService {
               platformPatientId: true,
               firstName: true,
               secondName: true,
+              dateOfBirth: true,
             },
           },
         },
@@ -126,7 +130,7 @@ export class PatientFamilyService {
               registeredByPatientProfileId:
                 guardianPatientProfileId,
               status: {
-                in: ['ACTIVE', 'SUSPENDED'],
+                in: ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'ACTIVE', 'SUSPENDED'],
               },
             },
             select: {
@@ -188,7 +192,8 @@ export class PatientFamilyService {
               }
             : null,
           guardianVerification,
-          patientCanRevoke: !dependentRegistration,
+          patientCanRevoke:
+            relationship.status === 'ACTIVE' && !dependentRegistration,
         };
       }),
     );
@@ -203,36 +208,24 @@ export class PatientFamilyService {
       await this.getPatientProfileId(userId);
 
     const now = new Date();
+    await this.database.client.patientFamilyRelationshipRequest.updateMany({
+      where: {
+        status: 'PENDING',
+        expiresAt: { lte: now },
+        OR: [
+          { requesterPatientProfileId: patientProfileId },
+          { targetPatientProfileId: patientProfileId },
+        ],
+      },
+      data: { status: 'EXPIRED' },
+    });
 
     const requests =
       await this.database.client.patientFamilyRelationshipRequest.findMany({
         where: {
-          AND: [
-            {
-              OR: [
-                {
-                  requesterPatientProfileId: patientProfileId,
-                },
-                {
-                  targetPatientProfileId: patientProfileId,
-                },
-              ],
-            },
-            {
-              status: 'PENDING',
-            },
-            {
-              OR: [
-                {
-                  expiresAt: null,
-                },
-                {
-                  expiresAt: {
-                    gt: now,
-                  },
-                },
-              ],
-            },
+          OR: [
+            { requesterPatientProfileId: patientProfileId },
+            { targetPatientProfileId: patientProfileId },
           ],
         },
         orderBy: {
@@ -357,7 +350,9 @@ export class PatientFamilyService {
           const existingDependent = await tx.patientDependentRegistration.findFirst({
             where: {
               registeredByPatientProfileId: guardian.id,
-              status: 'ACTIVE',
+              status: {
+                in: ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'ACTIVE', 'SUSPENDED'],
+              },
               relationshipType: dto.relationshipType,
               dependentPatientProfile: {
                 firstName,
@@ -411,7 +406,7 @@ export class PatientFamilyService {
                 registeredByPatientProfileId: guardian.id,
                 registeredByUserId: userId,
                 relationshipType: dto.relationshipType,
-                status: 'ACTIVE',
+                status: 'DRAFT',
               },
               select: {
                 id: true,
@@ -462,6 +457,8 @@ export class PatientFamilyService {
                 relationshipType: dto.relationshipType,
                 status: 'ACTIVE',
                 createdByUserId: userId,
+                requestedById: userId,
+                verificationStatus: 'PENDING_VERIFICATION',
               },
               select: {
                 id: true,
@@ -549,19 +546,53 @@ export class PatientFamilyService {
   ) {
     const requester = await this.getPatientProfile(userId);
 
-    const target =
-      await this.database.client.patientProfile.findUnique({
+    const identifier =
+      dto.targetIdentifier?.trim() ||
+      dto.targetPlatformPatientId?.trim();
+    if (!identifier) {
+      throw new BadRequestException(
+        'Enter a Revaltrix ID, phone number, or email address',
+      );
+    }
+
+    let target = await this.database.client.patientProfile.findUnique({
+      where: { platformPatientId: identifier },
+      select: {
+        id: true,
+        platformPatientId: true,
+        firstName: true,
+        secondName: true,
+      },
+    });
+
+    if (!target) {
+      const isEmail = identifier.includes('@');
+      const normalizedValue = isEmail
+        ? identifier.toLowerCase()
+        : identifier.replace(/[^\d+]/g, '');
+      if (!normalizedValue) {
+        throw new BadRequestException('Enter a valid phone number or email address');
+      }
+      const identity = await this.database.client.identity.findFirst({
         where: {
-          platformPatientId:
-            dto.targetPlatformPatientId.trim(),
+          type: isEmail ? 'EMAIL' : 'PHONE',
+          normalizedValue,
+          status: 'ACTIVE',
         },
-        select: {
-          id: true,
-          platformPatientId: true,
-          firstName: true,
-          secondName: true,
-        },
+        select: { userId: true },
       });
+      target = identity
+        ? await this.database.client.patientProfile.findUnique({
+            where: { userId: identity.userId },
+            select: {
+              id: true,
+              platformPatientId: true,
+              firstName: true,
+              secondName: true,
+            },
+          })
+        : null;
+    }
 
     if (!target) {
       throw new NotFoundException(
@@ -780,6 +811,7 @@ export class PatientFamilyService {
           id: true,
           requesterPatientProfileId: true,
           targetPatientProfileId: true,
+          requestedByUserId: true,
           relationshipType: true,
           status: true,
           expiresAt: true,
@@ -901,6 +933,7 @@ export class PatientFamilyService {
                 id: true,
                 requesterPatientProfileId: true,
                 targetPatientProfileId: true,
+                requestedByUserId: true,
                 relationshipType: true,
                 status: true,
                 expiresAt: true,
@@ -1015,6 +1048,9 @@ export class PatientFamilyService {
                   currentRequest.relationshipType,
                 status: 'ACTIVE',
                 createdByUserId: userId,
+                requestedById: currentRequest.requestedByUserId,
+                approvedById: userId,
+                verificationStatus: 'UNVERIFIED',
               },
               select: {
                 id: true,
@@ -1222,7 +1258,7 @@ export class PatientFamilyService {
           registeredByPatientProfileId:
             relationship.patientProfileId,
           status: {
-            in: ['ACTIVE', 'SUSPENDED'],
+            in: ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'ACTIVE', 'SUSPENDED'],
           },
         },
         select: {
@@ -1236,8 +1272,54 @@ export class PatientFamilyService {
       );
     }
 
+    const activeAccessGrants =
+      await this.database.client.familyAccessGrant.findMany({
+        where: {
+          relationshipId: relationship.id,
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true, patientId: true, delegateId: true },
+      });
+    if (
+      activeAccessGrants.length > 0 &&
+      dto.revokeActiveAccessGrants === undefined
+    ) {
+      throw new ConflictException({
+        message:
+          'This family connection has active medical access. Confirm whether to revoke those grants too; family relationship revocation alone will not remove medical access.',
+        activeAccessGrantCount: activeAccessGrants.length,
+        requiresConfirmation: true,
+      });
+    }
+
     const revoked =
       await this.database.client.$transaction(async (tx) => {
+        if (dto.revokeActiveAccessGrants) {
+          await tx.familyAccessGrant.updateMany({
+            where: {
+              relationshipId: relationship.id,
+              status: 'ACTIVE',
+              expiresAt: { gt: new Date() },
+            },
+            data: {
+              status: 'REVOKED',
+              revokedById: userId,
+              revokedAt: new Date(),
+            },
+          });
+          await tx.familyAccessAuditLog.createMany({
+            data: activeAccessGrants.map((grant) => ({
+              accessGrantId: grant.id,
+              patientId: grant.patientId,
+              delegateId: grant.delegateId,
+              action: 'CANCEL',
+              resourceType: 'PROFILE',
+              metadata: { reason: 'Family relationship revoked' },
+            })),
+          });
+        }
+
         const result =
           await tx.patientFamilyRelationship.update({
             where: {
@@ -1269,6 +1351,8 @@ export class PatientFamilyService {
                 relationship.relatedPatientProfileId,
               relationshipType:
                 relationship.relationshipType,
+              activeAccessGrantCount: activeAccessGrants.length,
+              accessGrantsRevoked: dto.revokeActiveAccessGrants === true,
             },
           },
         });

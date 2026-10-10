@@ -17,6 +17,7 @@ import { AuthenticatedDashboardPage } from './features/dashboard/pages/Authentic
 import { PatientDashboardPage } from './features/patient-dashboard/pages/PatientDashboardPage.js';
 import { PatientProfilePage } from './features/patient-profile/pages/PatientProfilePage.js';
 import { PatientFamilyPage } from './features/patient-family/pages/PatientFamilyPage.js';
+import { FamilyVerificationReviewPage } from './features/patient-family/pages/FamilyVerificationReviewPage.js';
 import './styles.css';
 
 type Route =
@@ -29,6 +30,7 @@ type Route =
   | { name: 'patient-dashboard' }
   | { name: 'patient-profile' }
   | { name: 'patient-family' }
+  | { name: 'family-verification-review' }
   | { name: 'login' };
 
 function getRoute(): Route {
@@ -59,6 +61,10 @@ function getRoute(): Route {
 
   if (path === '/patient/family') {
     return { name: 'patient-family' };
+  }
+
+  if (path === '/admin/family-verification') {
+    return { name: 'family-verification-review' };
   }
 
   if (path === '/patient/dashboard' || path === '/patient' || path.startsWith('/patient/')) {
@@ -263,6 +269,18 @@ function App() {
   if (route.name === 'patient-family') {
     return (
       <PatientFamilyPage
+        onNavigate={navigate}
+        onLogout={() => {
+          clearAuthSession();
+          navigate('/login');
+        }}
+      />
+    );
+  }
+
+  if (route.name === 'family-verification-review') {
+    return (
+      <FamilyVerificationReviewPage
         onNavigate={navigate}
         onLogout={() => {
           clearAuthSession();

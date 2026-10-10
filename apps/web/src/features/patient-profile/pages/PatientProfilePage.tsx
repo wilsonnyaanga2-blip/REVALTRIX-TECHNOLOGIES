@@ -326,9 +326,7 @@ export function PatientProfilePage({
     }
   }
 
-  if (loading) {
-    return <main className="patient-profile-loading" aria-live="polite">Loading your profile...</main>;
-  }
+  // Loading state moved inside main content container
 
   return (
     <div className="patient-app-shell">
@@ -373,7 +371,13 @@ export function PatientProfilePage({
           ) : null}
         </header>
 
-        <main className="patient-app-content patient-profile-content">
+        <main className="patient-app-content ml-64 patient-profile-content">
+          {loading ? (
+            <div className="patient-profile-loading" aria-live="polite">
+              Loading your profile...
+            </div>
+          ) : (
+            <>
           <section className="patient-dashboard-hero">
             <div>
               <p className="patient-dashboard-eyebrow">Your information</p>
@@ -515,6 +519,8 @@ export function PatientProfilePage({
           <button type="button" className="patient-dashboard-button secondary" onClick={() => onNavigate('/patient/dashboard')}>
             Back to overview
           </button>
+            </>
+          )}
         </main>
       </div>
     </div>

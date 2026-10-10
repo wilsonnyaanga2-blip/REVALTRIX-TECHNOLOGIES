@@ -16,6 +16,8 @@ import { CreateDependentRegistrationDto } from './dto/create-dependent-registrat
 import { RespondFamilyRelationshipRequestDto } from './dto/respond-family-relationship-request.dto.js';
 import { RevokeFamilyRelationshipDto } from './dto/revoke-family-relationship.dto.js';
 import { PatientFamilyService } from './patient-family.service.js';
+import { FamilyStepUpGuard } from './family-step-up.guard.js';
+import { RequireFamilyStepUp } from './require-family-step-up.decorator.js';
 
 @Controller('v1/patient-family')
 @UseGuards(AccessTokenGuard)
@@ -89,6 +91,8 @@ export class PatientFamilyController {
   }
 
   @Post('relationships/:relationshipId/revoke')
+  @UseGuards(FamilyStepUpGuard)
+  @RequireFamilyStepUp()
   async revokeRelationship(
     @Req() request: AuthenticatedRequest,
     @Param('relationshipId', new ParseUUIDPipe()) relationshipId: string,

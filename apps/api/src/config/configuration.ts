@@ -20,6 +20,15 @@ export default () => ({
     forcePathStyle: process.env.STORAGE_FORCE_PATH_STYLE === 'true',
   },
 
+  family: {
+    adolescentMinimumAge: Number(
+      process.env.FAMILY_ADOLESCENT_MINIMUM_AGE ?? 13,
+    ),
+    adolescentRestrictedPermissions:
+      process.env.FAMILY_ADOLESCENT_RESTRICTED_PERMISSIONS ??
+      'lab-results.read,prescriptions.read,documents.read',
+  },
+
   notifications: {
     webPush: {
       publicKey: process.env.WEB_PUSH_PUBLIC_KEY ?? '',
